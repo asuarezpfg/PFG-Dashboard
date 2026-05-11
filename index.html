@@ -10,30 +10,50 @@
   body { font-family: -apple-system, Arial, sans-serif; margin: 0; background: #f4f6f8; }
   .login { max-width: 340px; margin: 100px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.1); }
   .login input { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; }
-  .login button, .btn { background: #1f4e79; color: white; border: none; padding: 10px 18px; cursor: pointer; border-radius: 4px; font-size: 14px; }
+  .login button, .btn { background: #1f4e79; color: white; border: none; padding: 9px 16px; cursor: pointer; border-radius: 4px; font-size: 13px; margin: 2px; }
   .btn.alt { background: #555; }
   .btn.danger { background: #b33; }
+  .btn.success { background: #2a8c4a; }
+  .btn.warn { background: #c8801a; }
+  .btn.small { padding: 4px 10px; font-size: 12px; }
   .app { display: none; }
   header { background: #1f4e79; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; }
-  nav { background: #2c5f8d; padding: 0 25px; display: flex; gap: 5px; }
-  nav button { background: transparent; color: #cfd8e3; border: none; padding: 14px 20px; cursor: pointer; font-size: 14px; border-bottom: 3px solid transparent; }
+  nav { background: #2c5f8d; padding: 0 25px; display: flex; gap: 5px; flex-wrap: wrap; }
+  nav button { background: transparent; color: #cfd8e3; border: none; padding: 14px 18px; cursor: pointer; font-size: 14px; border-bottom: 3px solid transparent; }
   nav button.active { color: white; border-bottom: 3px solid #fff; font-weight: bold; }
+  .subnav { display: flex; gap: 5px; margin-bottom: 15px; flex-wrap: wrap; }
+  .subnav button { background: white; border: 1px solid #ccd; color: #1f4e79; padding: 7px 14px; cursor: pointer; border-radius: 4px; font-size: 13px; }
+  .subnav button.active { background: #1f4e79; color: white; }
   .page { display: none; padding: 20px 25px; }
   .page.active { display: block; }
+  .sub { display: none; }
+  .sub.active { display: block; }
   .card { background: white; padding: 20px; border-radius: 8px; margin: 15px 0; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
   table { width: 100%; border-collapse: collapse; }
-  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; vertical-align: top; }
   th { background: #f0f3f7; }
-  select, input[type=file], input[type=text], input[type=date], input[type=number] { padding: 8px; margin: 4px; box-sizing: border-box; }
+  select, input[type=file], input[type=text], input[type=date], input[type=number], input[type=email], textarea { padding: 7px; margin: 3px; box-sizing: border-box; font-family: inherit; font-size: 13px; }
+  textarea { width: 100%; min-height: 60px; }
   .row { display: flex; gap: 15px; flex-wrap: wrap; }
   .col { flex: 1; min-width: 300px; }
-  .pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; background:#e8eef5; color:#1f4e79; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:bold; }
+  .pill.pending { background:#fff3cd; color:#856404; }
+  .pill.approved { background:#d4edda; color:#155724; }
+  .pill.denied { background:#f8d7da; color:#721c24; }
+  .pill.signed { background:#d4edda; color:#155724; }
+  .pill.missing { background:#f8d7da; color:#721c24; }
   .cal { display: grid; grid-template-columns: repeat(7,1fr); gap: 4px; }
-  .cal div { background: #fafbfc; border:1px solid #eee; padding: 8px; min-height: 60px; font-size: 12px; border-radius: 4px; }
+  .cal div { background: #fafbfc; border:1px solid #eee; padding: 6px; min-height: 60px; font-size: 11px; border-radius: 4px; }
   .cal .head { background:#1f4e79; color:white; text-align:center; font-weight:bold; min-height:auto; }
   .cal .holiday { background:#fff3cd; border-color:#ffe69c; }
+  .cal .pto { background:#d4edda; border-color:#a3d9b1; }
   .cal .today { outline: 2px solid #1f4e79; }
-  h2,h3 { color:#1f4e79; }
+  h2,h3,h4 { color:#1f4e79; }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .profile-card { border:1px solid #ddd; padding:15px; border-radius:6px; background:#fafbfc; margin-bottom:10px; }
+  .profile-card h4 { margin:0 0 8px 0; }
+  .small-muted { font-size:12px; color:#666; }
+  label { font-size:12px; color:#555; display:block; margin-top:6px; }
 </style>
 </head>
 <body>
@@ -70,78 +90,170 @@
       <p style="font-size:13px;color:#666;">Expected columns: Model, Description, Symbol, Target Percent, Minimum Percent, Maximum Percent</p>
       <button class="btn danger" onclick="clearModels()">Clear All Models</button>
     </div>
-
     <div class="card">
       <h3>Select Model</h3>
       <select id="modelSelect" onchange="renderModel()"></select>
       <button class="btn" onclick="exportExcel()">Export to Excel</button>
       <button class="btn" onclick="loadBenchmarks()">Refresh Benchmarks</button>
     </div>
-
     <div class="row">
-      <div class="col card">
-        <h3>Model Holdings</h3>
-        <table id="holdingsTable"></table>
-      </div>
-      <div class="col card">
-        <h3>Allocation</h3>
-        <canvas id="allocChart"></canvas>
-      </div>
+      <div class="col card"><h3>Model Holdings</h3><table id="holdingsTable"></table></div>
+      <div class="col card"><h3>Allocation</h3><canvas id="allocChart"></canvas></div>
     </div>
-
     <div class="card">
       <h3>Benchmarks (YTD Performance)</h3>
-      <p style="font-size:13px;color:#666;">Your selected model's weighted YTD return is shown for comparison (based on each holding's YTD price change).</p>
-      <table id="benchTable">
-        <tr><th>Index / Model</th><th>Symbol</th><th>Latest</th><th>YTD %</th></tr>
-      </table>
+      <table id="benchTable"></table>
       <canvas id="benchChart" style="margin-top:20px;"></canvas>
     </div>
   </div>
 
   <!-- HR PAGE -->
   <div id="page-hr" class="page">
-    <div class="row">
-      <div class="col card">
-        <h3>Employees</h3>
-        <table id="empTable">
-          <tr><th>Name</th><th>Date of Hire</th><th>PTO Used</th><th>Unpaid TO</th><th>PTO Balance</th><th></th></tr>
-        </table>
-        <h4 style="margin-top:20px;">Add / Update Employee</h4>
-        <input type="text" id="empName" placeholder="Name">
-        <input type="date" id="empHire" placeholder="Date of Hire">
-        <input type="number" id="empPTO" placeholder="PTO used (days)" step="0.5">
-        <input type="number" id="empUnpaid" placeholder="Unpaid TO (days)" step="0.5">
-        <input type="number" id="empAllot" placeholder="Annual PTO allotment" step="0.5" value="15">
+    <div class="subnav">
+      <button id="sub-emp" class="active" onclick="showSub('emp')">Employee Profiles</button>
+      <button id="sub-leave" onclick="showSub('leave')">Leave Requests</button>
+      <button id="sub-cal" onclick="showSub('cal')">Master Calendar</button>
+      <button id="sub-docs" onclick="showSub('docs')">Documents & Agreements</button>
+    </div>
+
+    <!-- EMPLOYEE PROFILES SUB -->
+    <div id="sub-emp-page" class="sub active">
+      <div class="card">
+        <h3>Add / Update Employee</h3>
+        <div class="grid2">
+          <div>
+            <label>Name</label><input type="text" id="empName" placeholder="Full name">
+            <label>Email</label><input type="email" id="empEmail" placeholder="email@pointerfg.com">
+            <label>Date of Hire</label><input type="date" id="empHire">
+            <label>Employment Type</label>
+            <select id="empType">
+              <option value="Full-Time">Full-Time</option>
+              <option value="Part-Time">Part-Time</option>
+              <option value="Advisor (Fee-Based)">Advisor (Fee-Based)</option>
+              <option value="Temporary">Temporary</option>
+            </select>
+          </div>
+          <div>
+            <label>PTO Used (days)</label><input type="number" id="empPTO" step="0.25" value="0">
+            <label>Unpaid Time Off Used (days)</label><input type="number" id="empUnpaid" step="0.25" value="0">
+            <label>Military Leave Used (days)</label><input type="number" id="empMilitary" step="0.25" value="0">
+            <label>Bereavement Used (days)</label><input type="number" id="empBereavement" step="0.25" value="0">
+          </div>
+        </div>
         <button class="btn" onclick="saveEmployee()">Save Employee</button>
+        <p class="small-muted">PTO allotment auto-calculates from hire date per handbook: Year 1 = 10 days · Yrs 2-5 = 12 · Yrs 6-15 = 15 · Yr 16+ = 20.</p>
       </div>
-      <div class="col card">
-        <h3>Quick Stats</h3>
-        <div id="hrStats"></div>
+      <div id="empCards"></div>
+    </div>
+
+    <!-- LEAVE REQUESTS SUB -->
+    <div id="sub-leave-page" class="sub">
+      <div class="row">
+        <div class="col card">
+          <h3>Submit Leave Request</h3>
+          <label>Employee</label>
+          <select id="lrEmployee"></select>
+          <label>Date Requested (today)</label>
+          <input type="date" id="lrRequested">
+          <label>Leave Type</label>
+          <select id="lrType">
+            <option>PTO / Personal</option>
+            <option>Unpaid Time Off</option>
+            <option>Military Leave</option>
+            <option>Bereavement</option>
+            <option>Jury Duty</option>
+            <option>FMLA</option>
+            <option>Sick</option>
+          </select>
+          <label>Start Date</label><input type="date" id="lrStart">
+          <label>End Date</label><input type="date" id="lrEnd">
+          <label>Partial Day?</label>
+          <select id="lrPartial">
+            <option value="1">Full day(s)</option>
+            <option value="0.5">½ day</option>
+            <option value="0.25">¼ day</option>
+          </select>
+          <label>Total Days Off (auto-calc, editable)</label>
+          <input type="number" id="lrDays" step="0.25" value="1">
+          <label>Reason / Notes</label>
+          <textarea id="lrNotes" placeholder="Reason for request..."></textarea>
+          <label>Approver Email</label>
+          <input type="email" id="lrApprover" placeholder="mbruce@pointerfg.com" style="width:100%;">
+          <div style="margin-top:10px;">
+            <button class="btn" onclick="submitLeaveRequest()">Submit Request</button>
+            <button class="btn alt" onclick="calcDays()">Auto-calc Days</button>
+          </div>
+          <p class="small-muted">Per handbook: requests should be submitted at least 2 weeks in advance when possible.</p>
+        </div>
+        <div class="col card">
+          <h3>Quick Reference</h3>
+          <p class="small-muted"><b>Bereavement:</b> 5 days immediate family · 1 day extended<br>
+          <b>Jury Duty:</b> First 5 days paid (difference)<br>
+          <b>Soft-close days</b> (½ day option): Day after Thanksgiving, Christmas Eve, Day after Christmas<br>
+          <b>Bonus PTO:</b> Working on MLK, Presidents Day, Good Friday, or Juneteenth = +1 personal day</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>All Leave Requests</h3>
+        <select id="filterStatus" onchange="renderLeaveRequests()">
+          <option value="all">All Statuses</option>
+          <option value="Pending">Pending</option>
+          <option value="Approved">Approved</option>
+          <option value="Denied">Denied</option>
+        </select>
+        <button class="btn alt" onclick="exportLeaveExcel()">Export to Excel</button>
+        <table id="leaveTable"></table>
       </div>
     </div>
 
-    <div class="card">
-      <h3>Master Calendar — <span id="calMonthLabel"></span></h3>
-      <button class="btn alt" onclick="changeMonth(-1)">◀ Prev</button>
-      <button class="btn alt" onclick="changeMonth(1)">Next ▶</button>
-      <button class="btn" onclick="goToday()">Today</button>
-      <p style="font-size:13px;color:#666;margin-top:10px;">
-        <span class="pill" style="background:#fff3cd;">Trading Holiday</span>
-        Markets closed on highlighted dates (NYSE/Nasdaq schedule).
-      </p>
-      <div id="calendar" class="cal"></div>
+    <!-- CALENDAR SUB -->
+    <div id="sub-cal-page" class="sub">
+      <div class="card">
+        <h3>Master Calendar — <span id="calMonthLabel"></span></h3>
+        <button class="btn alt" onclick="changeMonth(-1)">◀ Prev</button>
+        <button class="btn alt" onclick="changeMonth(1)">Next ▶</button>
+        <button class="btn" onclick="goToday()">Today</button>
+        <button class="btn success" onclick="exportHolidaysICS()">Export Trading Holidays (.ics for Outlook)</button>
+        <p class="small-muted" style="margin-top:10px;">
+          <span class="pill" style="background:#fff3cd;color:#856404;">Trading Holiday</span>
+          &nbsp;<span class="pill" style="background:#d4edda;color:#155724;">Approved PTO</span>
+        </p>
+        <div id="calendar" class="cal"></div>
+      </div>
+    </div>
+
+    <!-- DOCUMENTS SUB -->
+    <div id="sub-docs-page" class="sub">
+      <div class="card">
+        <h3>Employee Documents & Signed Agreements</h3>
+        <p class="small-muted">Track signed status of company-required agreements per employee. Date the document was signed and returned.</p>
+        <table id="docsTable"></table>
+      </div>
+      <div class="card">
+        <h3>Update Document Status</h3>
+        <label>Employee</label><select id="docEmp"></select>
+        <label>Document</label>
+        <select id="docType">
+          <option>Handbook Acknowledgement</option>
+          <option>Confidentiality Agreement</option>
+          <option>Non-Solicitation Agreement</option>
+          <option>Fitness Center Waiver (Bluemound)</option>
+          <option>I-9 Form</option>
+          <option>W-4 Form</option>
+          <option>Direct Deposit Authorization</option>
+        </select>
+        <label>Date Signed</label><input type="date" id="docDate">
+        <label>Notes</label><input type="text" id="docNotes" placeholder="Optional notes / file location" style="width:60%;">
+        <br><button class="btn" onclick="saveDoc()">Save Document Record</button>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
 // ============ LOGIN ============
-const USERS = {
-  "asuarez": "PFGBrooky!",
-  "mbruce":  "PFGBrooky!"
-};
-
+const USERS = { "asuarez": "PFGBrooky!", "mbruce": "PFGBrooky!" };
 function login() {
   const u = document.getElementById('username').value.trim();
   const p = document.getElementById('password').value;
@@ -149,27 +261,28 @@ function login() {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     document.getElementById('whoami').innerText = "Signed in as: " + u;
-    loadStoredModels();
-    loadBenchmarks();
-    loadEmployees();
+    loadStoredModels(); loadBenchmarks();
+    loadEmployees(); loadLeaveRequests(); loadDocs();
     renderCalendar();
-  } else {
-    document.getElementById('loginError').innerText = "Invalid credentials";
-  }
+    document.getElementById('lrRequested').valueAsDate = new Date();
+  } else { document.getElementById('loginError').innerText = "Invalid credentials"; }
 }
 function logout() { location.reload(); }
-
-// ============ TABS ============
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   document.getElementById('tab-'+id).classList.add('active');
 }
+function showSub(id) {
+  document.querySelectorAll('.sub').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.subnav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('sub-'+id+'-page').classList.add('active');
+  document.getElementById('sub-'+id).classList.add('active');
+}
 
-// ============ INVESTMENTS ============
+// ============ INVESTMENTS (unchanged) ============
 let models = {};
-
 function loadStoredModels() {
   const saved = localStorage.getItem('models');
   if (saved) models = JSON.parse(saved);
@@ -177,38 +290,24 @@ function loadStoredModels() {
 }
 function clearModels() {
   if (!confirm('Delete all uploaded models?')) return;
-  models = {};
-  localStorage.removeItem('models');
-  refreshModelSelect();
+  models = {}; localStorage.removeItem('models'); refreshModelSelect();
   document.getElementById('holdingsTable').innerHTML='';
   if (allocChartObj) allocChartObj.destroy();
 }
 function refreshModelSelect() {
-  const sel = document.getElementById('modelSelect');
-  sel.innerHTML = '';
-  Object.keys(models).forEach(m => {
-    const o = document.createElement('option'); o.value=m; o.text=m; sel.add(o);
-  });
+  const sel = document.getElementById('modelSelect'); sel.innerHTML = '';
+  Object.keys(models).forEach(m => { const o=document.createElement('option'); o.value=m; o.text=m; sel.add(o); });
   if (Object.keys(models).length) renderModel();
 }
 function handleCSV(e) {
-  const file = e.target.files[0];
-  Papa.parse(file, {
-    header: true, skipEmptyLines: true,
+  Papa.parse(e.target.files[0], { header: true, skipEmptyLines: true,
     complete: function(results) {
-      results.data.forEach(row => {
-        const m = row.Model; if (!m) return;
-        if (!models[m]) models[m] = [];
-        models[m].push(row);
-      });
+      results.data.forEach(row => { const m = row.Model; if (!m) return;
+        if (!models[m]) models[m] = []; models[m].push(row); });
       localStorage.setItem('models', JSON.stringify(models));
-      refreshModelSelect();
-      alert('Model loaded!');
-      loadBenchmarks();
-    }
-  });
+      refreshModelSelect(); alert('Model loaded!'); loadBenchmarks();
+    }});
 }
-
 let allocChartObj;
 function renderModel() {
   const m = document.getElementById('modelSelect').value;
@@ -217,34 +316,24 @@ function renderModel() {
   const labels = [], values = [];
   data.forEach(r => {
     html += `<tr><td>${r.Symbol}</td><td>${r['Target Percent']}</td><td>${r['Minimum Percent']}</td><td>${r['Maximum Percent']}</td></tr>`;
-    labels.push(r.Symbol);
-    values.push(parseFloat(r['Target Percent']) || 0);
+    labels.push(r.Symbol); values.push(parseFloat(r['Target Percent']) || 0);
   });
   document.getElementById('holdingsTable').innerHTML = html;
   if (allocChartObj) allocChartObj.destroy();
-  allocChartObj = new Chart(document.getElementById('allocChart'), {
-    type: 'doughnut', data: { labels, datasets: [{ data: values }] }
-  });
+  allocChartObj = new Chart(document.getElementById('allocChart'), { type: 'doughnut', data: { labels, datasets: [{ data: values }] } });
 }
-
-// ============ BENCHMARKS ============
 const BENCHMARKS = [
   { name: 'S&P 500', symbol: '^GSPC', color:'#1f4e79' },
   { name: 'Dow Jones', symbol: '^DJI', color:'#c00000' },
   { name: 'Nasdaq Composite', symbol: '^IXIC', color:'#00b050' }
 ];
-
 async function fetchYahoo(symbol) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=ytd&interval=1d`;
   const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-  const res = await fetch(proxy);
-  const json = await res.json();
+  const res = await fetch(proxy); const json = await res.json();
   const r = json.chart.result[0];
-  const closes = r.indicators.quote[0].close;
-  const ts = r.timestamp;
-  return { closes, ts };
+  return { closes: r.indicators.quote[0].close, ts: r.timestamp };
 }
-
 async function loadBenchmarks() {
   const tbl = document.getElementById('benchTable');
   tbl.innerHTML = '<tr><th>Index / Model</th><th>Symbol</th><th>Latest</th><th>YTD %</th></tr>';
@@ -256,168 +345,312 @@ async function loadBenchmarks() {
       const first = clean[0], last = clean[clean.length-1];
       const ytd = ((last-first)/first*100).toFixed(2);
       tbl.innerHTML += `<tr><td>${b.name}</td><td>${b.symbol}</td><td>${last.toFixed(2)}</td><td>${ytd}%</td></tr>`;
-      datasets.push({
-        label: b.name,
-        data: closes.map((c,i)=> c===null?null:((c-first)/first*100)),
-        timestamps: ts,
-        borderColor: b.color, fill:false
-      });
-    } catch (err) {
-      tbl.innerHTML += `<tr><td>${b.name}</td><td colspan="3">Error loading</td></tr>`;
-    }
+      datasets.push({ label: b.name, data: closes.map(c => c===null?null:((c-first)/first*100)), timestamps: ts, borderColor: b.color, fill:false });
+    } catch (err) { tbl.innerHTML += `<tr><td>${b.name}</td><td colspan="3">Error</td></tr>`; }
   }
-
-  // Model weighted YTD
   const m = document.getElementById('modelSelect').value;
   if (m && models[m]) {
     let totalW = 0, weightedYtd = 0;
     for (const row of models[m]) {
-      const sym = row.Symbol;
-      const w = parseFloat(row['Target Percent']) || 0;
+      const sym = row.Symbol; const w = parseFloat(row['Target Percent']) || 0;
       if (!sym || sym.startsWith('$')) continue;
-      try {
-        const {closes} = await fetchYahoo(sym);
-        const clean = closes.filter(x=>x!==null);
+      try { const {closes} = await fetchYahoo(sym); const clean = closes.filter(x=>x!==null);
         if (clean.length<2) continue;
         const ytd = (clean[clean.length-1]-clean[0])/clean[0]*100;
-        weightedYtd += ytd * w;
-        totalW += w;
+        weightedYtd += ytd * w; totalW += w;
       } catch(e){}
     }
-    if (totalW>0) {
-      const modelYtd = (weightedYtd/totalW).toFixed(2);
-      tbl.innerHTML += `<tr style="background:#eef6ff;font-weight:bold;"><td>${m} (Model)</td><td>—</td><td>—</td><td>${modelYtd}%</td></tr>`;
-    }
+    if (totalW>0) tbl.innerHTML += `<tr style="background:#eef6ff;font-weight:bold;"><td>${m} (Model)</td><td>—</td><td>—</td><td>${(weightedYtd/totalW).toFixed(2)}%</td></tr>`;
   }
   renderBenchChart(datasets);
 }
-
 let benchChartObj;
 function renderBenchChart(datasets) {
   if (benchChartObj) benchChartObj.destroy();
   const labels = datasets[0] ? datasets[0].timestamps.map(t => new Date(t*1000).toLocaleDateString()) : [];
   benchChartObj = new Chart(document.getElementById('benchChart'), {
-    type: 'line',
-    data: { labels, datasets: datasets.map(d=>({
-      label:d.label, data:d.data, borderColor:d.borderColor, fill:false, pointRadius:0
-    }))},
+    type: 'line', data: { labels, datasets: datasets.map(d=>({ label:d.label, data:d.data, borderColor:d.borderColor, fill:false, pointRadius:0 }))},
     options: { scales:{ y:{ title:{display:true,text:'% Change YTD'} } } }
   });
 }
-
-// ============ EXCEL EXPORT ============
 function exportExcel() {
   const m = document.getElementById('modelSelect').value;
-  const data = models[m] || [];
-  const ws = XLSX.utils.json_to_sheet(data);
+  const ws = XLSX.utils.json_to_sheet(models[m] || []);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, m.substring(0,30));
   XLSX.writeFile(wb, `${m}.xlsx`);
 }
 
-// ============ HR ============
+// ============ HR: EMPLOYEES ============
 let employees = [];
+function pgAllotment(hireDateStr) {
+  if (!hireDateStr) return 10;
+  const years = (new Date() - new Date(hireDateStr)) / (365.25*24*3600*1000);
+  if (years < 1) return 10;
+  if (years < 6) return 12;
+  if (years < 16) return 15;
+  return 20;
+}
+function yearsOfService(hireDateStr) {
+  if (!hireDateStr) return 0;
+  return ((new Date() - new Date(hireDateStr)) / (365.25*24*3600*1000)).toFixed(1);
+}
+function calc401kDate(hireDateStr, unpaid, military) {
+  if (!hireDateStr) return '—';
+  const d = new Date(hireDateStr);
+  d.setFullYear(d.getFullYear() + 1);
+  d.setDate(d.getDate() + (parseFloat(unpaid)||0) + (parseFloat(military)||0));
+  return d.toISOString().slice(0,10);
+}
 function loadEmployees() {
   const saved = localStorage.getItem('employees');
-  if (saved) {
-    employees = JSON.parse(saved);
-  } else {
-    // Placeholder employees
+  if (saved) { employees = JSON.parse(saved); }
+  else {
     employees = [
-      { name:'Alex Suarez', hire:'2021-06-15', ptoUsed:5,  unpaid:0, allot:20 },
-      { name:'Megan Bruce', hire:'2019-03-04', ptoUsed:8,  unpaid:1, allot:20 },
-      { name:'John Placeholder', hire:'2023-01-10', ptoUsed:2, unpaid:0, allot:15 },
-      { name:'Jane Placeholder', hire:'2024-09-22', ptoUsed:0, unpaid:0, allot:15 }
+      { name:'Alex Suarez', email:'asuarez@pointerfg.com', hire:'2023-06-15', type:'Full-Time', ptoUsed:3, unpaid:0, military:0, bereavement:0 },
+      { name:'Matthew Bruce', email:'mbruce@pointerfg.com', hire:'2022-01-04', type:'Full-Time', ptoUsed:5, unpaid:0, military:0, bereavement:0 }
     ];
     saveEmployeesStorage();
   }
   renderEmployees();
+  refreshDropdowns();
 }
 function saveEmployeesStorage(){ localStorage.setItem('employees', JSON.stringify(employees)); }
-
 function renderEmployees() {
-  const tbl = document.getElementById('empTable');
-  let html = '<tr><th>Name</th><th>Date of Hire</th><th>PTO Used</th><th>Unpaid TO</th><th>PTO Balance</th><th></th></tr>';
+  const container = document.getElementById('empCards');
+  let html = '';
   employees.forEach((e,i)=>{
-    const bal = (e.allot||0) - (e.ptoUsed||0);
-    html += `<tr>
-      <td>${e.name}</td>
-      <td>${e.hire||''}</td>
-      <td>${e.ptoUsed||0}</td>
-      <td>${e.unpaid||0}</td>
-      <td>${bal} / ${e.allot||0}</td>
-      <td><button class="btn danger" onclick="deleteEmp(${i})">×</button></td>
-    </tr>`;
+    const allot = pgAllotment(e.hire);
+    const bal = allot - (parseFloat(e.ptoUsed)||0);
+    const k401 = calc401kDate(e.hire, e.unpaid, e.military);
+    const docStatus = getDocStatus(e.name);
+    html += `<div class="profile-card">
+      <h4>${e.name} <span class="small-muted">— ${e.type||'Full-Time'} · ${yearsOfService(e.hire)} yrs</span></h4>
+      <div class="grid2">
+        <div>
+          <b>Email:</b> ${e.email||'—'}<br>
+          <b>Hire Date:</b> ${e.hire||'—'}<br>
+          <b>401(k) Eligibility:</b> ${k401} <span class="small-muted">(1 yr + unpaid/military leave offset)</span><br>
+        </div>
+        <div>
+          <b>PTO Allotment:</b> ${allot} days/yr<br>
+          <b>PTO Used:</b> ${e.ptoUsed||0} · <b>Balance:</b> ${bal}<br>
+          <b>Unpaid TO Used:</b> ${e.unpaid||0} · <b>Military:</b> ${e.military||0} · <b>Bereavement:</b> ${e.bereavement||0}<br>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-size:12px;"><b>Documents:</b> ${docStatus}</div>
+      <div style="margin-top:8px;">
+        <button class="btn small" onclick="editEmp(${i})">Edit</button>
+        <button class="btn small danger" onclick="deleteEmp(${i})">Remove</button>
+      </div>
+    </div>`;
   });
-  tbl.innerHTML = html;
-
-  const totalPTO = employees.reduce((s,e)=>s+(parseFloat(e.ptoUsed)||0),0);
-  const totalUnpaid = employees.reduce((s,e)=>s+(parseFloat(e.unpaid)||0),0);
-  document.getElementById('hrStats').innerHTML = `
-    <p><b>Total Employees:</b> ${employees.length}</p>
-    <p><b>Total PTO Used (YTD):</b> ${totalPTO} days</p>
-    <p><b>Total Unpaid TO (YTD):</b> ${totalUnpaid} days</p>
-  `;
+  container.innerHTML = html;
+}
+function getDocStatus(empName) {
+  const reqDocs = ['Handbook Acknowledgement','Confidentiality Agreement','Non-Solicitation Agreement'];
+  return reqDocs.map(d => {
+    const found = docs.find(x => x.employee===empName && x.type===d);
+    return `<span class="pill ${found?'signed':'missing'}">${d}: ${found?found.date:'Missing'}</span>`;
+  }).join(' ');
+}
+function editEmp(i){
+  const e = employees[i];
+  document.getElementById('empName').value = e.name;
+  document.getElementById('empEmail').value = e.email||'';
+  document.getElementById('empHire').value = e.hire||'';
+  document.getElementById('empType').value = e.type||'Full-Time';
+  document.getElementById('empPTO').value = e.ptoUsed||0;
+  document.getElementById('empUnpaid').value = e.unpaid||0;
+  document.getElementById('empMilitary').value = e.military||0;
+  document.getElementById('empBereavement').value = e.bereavement||0;
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 function saveEmployee() {
   const name = document.getElementById('empName').value.trim();
   if (!name) { alert('Name required'); return; }
-  const existing = employees.findIndex(e=>e.name.toLowerCase()===name.toLowerCase());
   const rec = {
-    name,
+    name, email: document.getElementById('empEmail').value,
     hire: document.getElementById('empHire').value,
+    type: document.getElementById('empType').value,
     ptoUsed: parseFloat(document.getElementById('empPTO').value)||0,
     unpaid: parseFloat(document.getElementById('empUnpaid').value)||0,
-    allot: parseFloat(document.getElementById('empAllot').value)||15
+    military: parseFloat(document.getElementById('empMilitary').value)||0,
+    bereavement: parseFloat(document.getElementById('empBereavement').value)||0
   };
-  if (existing>=0) employees[existing] = rec; else employees.push(rec);
-  saveEmployeesStorage();
-  renderEmployees();
-  ['empName','empHire','empPTO','empUnpaid'].forEach(id=>document.getElementById(id).value='');
+  const idx = employees.findIndex(x=>x.name.toLowerCase()===name.toLowerCase());
+  if (idx>=0) employees[idx] = rec; else employees.push(rec);
+  saveEmployeesStorage(); renderEmployees(); refreshDropdowns();
+  ['empName','empEmail','empHire','empPTO','empUnpaid','empMilitary','empBereavement'].forEach(id=>document.getElementById(id).value=id==='empHire'||id==='empName'||id==='empEmail'?'':'0');
+  document.getElementById('empName').value='';
+  document.getElementById('empEmail').value='';
+  document.getElementById('empHire').value='';
+  alert('Employee saved.');
 }
 function deleteEmp(i){
   if (!confirm('Remove '+employees[i].name+'?')) return;
-  employees.splice(i,1); saveEmployeesStorage(); renderEmployees();
+  employees.splice(i,1); saveEmployeesStorage(); renderEmployees(); refreshDropdowns();
+}
+function refreshDropdowns() {
+  ['lrEmployee','docEmp'].forEach(id=>{
+    const sel = document.getElementById(id); if (!sel) return;
+    sel.innerHTML = '';
+    employees.forEach(e=>{ const o=document.createElement('option'); o.value=e.name; o.text=e.name; sel.add(o); });
+  });
 }
 
-// ============ CALENDAR with Trading Holidays ============
-// NYSE/Nasdaq full closures
-const TRADING_HOLIDAYS = {
-  '2025-01-01':"New Year's Day",
-  '2025-01-09':"Day of Mourning (Carter)",
-  '2025-01-20':"MLK Jr. Day",
-  '2025-02-17':"Presidents' Day",
-  '2025-04-18':"Good Friday",
-  '2025-05-26':"Memorial Day",
-  '2025-06-19':"Juneteenth",
-  '2025-07-04':"Independence Day",
-  '2025-09-01':"Labor Day",
-  '2025-11-27':"Thanksgiving",
-  '2025-12-25':"Christmas Day",
-  '2026-01-01':"New Year's Day",
-  '2026-01-19':"MLK Jr. Day",
-  '2026-02-16':"Presidents' Day",
-  '2026-04-03':"Good Friday",
-  '2026-05-25':"Memorial Day",
-  '2026-06-19':"Juneteenth",
-  '2026-07-03':"Independence Day (Observed)",
-  '2026-09-07':"Labor Day",
-  '2026-11-26':"Thanksgiving",
-  '2026-12-25':"Christmas Day"
-};
+// ============ LEAVE REQUESTS ============
+let leaveRequests = [];
+function loadLeaveRequests() {
+  const saved = localStorage.getItem('leaveRequests');
+  leaveRequests = saved ? JSON.parse(saved) : [];
+  renderLeaveRequests();
+}
+function saveLR(){ localStorage.setItem('leaveRequests', JSON.stringify(leaveRequests)); }
+function calcDays() {
+  const s = document.getElementById('lrStart').value;
+  const e = document.getElementById('lrEnd').value;
+  const partial = parseFloat(document.getElementById('lrPartial').value);
+  if (!s||!e) { alert('Enter start and end dates'); return; }
+  let count = 0; let d = new Date(s); const end = new Date(e);
+  while (d <= end) {
+    const dow = d.getDay();
+    if (dow!==0 && dow!==6) count++;
+    d.setDate(d.getDate()+1);
+  }
+  // for partial, apply to total
+  document.getElementById('lrDays').value = (count * partial).toFixed(2);
+}
+function submitLeaveRequest() {
+  const emp = document.getElementById('lrEmployee').value;
+  const type = document.getElementById('lrType').value;
+  const start = document.getElementById('lrStart').value;
+  const end = document.getElementById('lrEnd').value;
+  const days = parseFloat(document.getElementById('lrDays').value);
+  const partial = document.getElementById('lrPartial').value;
+  const notes = document.getElementById('lrNotes').value;
+  const approver = document.getElementById('lrApprover').value;
+  const requested = document.getElementById('lrRequested').value;
+  if (!emp||!start||!end||!days) { alert('Fill all required fields'); return; }
+  // check balance for PTO
+  if (type === 'PTO / Personal') {
+    const e = employees.find(x=>x.name===emp);
+    if (e) {
+      const allot = pgAllotment(e.hire); const bal = allot - (parseFloat(e.ptoUsed)||0);
+      if (days > bal && !confirm(`Warning: ${emp} only has ${bal} PTO days remaining. Submit anyway?`)) return;
+    }
+  }
+  const rec = {
+    id: Date.now(), employee: emp, type, start, end, days, partial,
+    notes, approver, requested, status: 'Pending', decidedAt: null, decidedBy: null
+  };
+  leaveRequests.push(rec); saveLR(); renderLeaveRequests();
+  // open email draft
+  if (approver) {
+    const subj = encodeURIComponent(`Leave Request: ${emp} (${type})`);
+    const body = encodeURIComponent(
+      `New leave request submitted on the Pointer Financial Group internal dashboard.\n\n`+
+      `Employee: ${emp}\nType: ${type}\nStart: ${start}\nEnd: ${end}\nDays: ${days}\n`+
+      `Partial: ${partial==='1'?'Full days':partial==='0.5'?'½ day':'¼ day'}\n`+
+      `Notes: ${notes}\n\nPlease approve or deny in the dashboard.`);
+    window.open(`mailto:${approver}?subject=${subj}&body=${body}`);
+  }
+  alert('Request submitted as Pending.');
+}
+function renderLeaveRequests() {
+  const filter = document.getElementById('filterStatus').value;
+  let html = '<tr><th>Date Req</th><th>Employee</th><th>Type</th><th>Start</th><th>End</th><th>Days</th><th>Partial</th><th>Notes</th><th>Status</th><th>Actions</th></tr>';
+  leaveRequests.slice().reverse().forEach(r => {
+    if (filter!=='all' && r.status!==filter) return;
+    const partialLbl = r.partial==='1'?'Full':r.partial==='0.5'?'½':'¼';
+    html += `<tr>
+      <td>${r.requested||'—'}</td><td>${r.employee}</td><td>${r.type}</td>
+      <td>${r.start}</td><td>${r.end}</td><td>${r.days}</td><td>${partialLbl}</td>
+      <td style="max-width:200px;">${r.notes||''}</td>
+      <td><span class="pill ${r.status.toLowerCase()}">${r.status}</span></td>
+      <td>
+        ${r.status==='Pending' ? `
+          <button class="btn small success" onclick="decideLR(${r.id},'Approved')">Approve</button>
+          <button class="btn small danger" onclick="decideLR(${r.id},'Denied')">Deny</button>` : ''}
+        <button class="btn small alt" onclick="exportLRIcs(${r.id})">📅 .ics</button>
+        <button class="btn small warn" onclick="emailEmployee(${r.id})">✉ Email</button>
+      </td>
+    </tr>`;
+  });
+  document.getElementById('leaveTable').innerHTML = html;
+  renderCalendar();
+}
+function decideLR(id, status) {
+  const r = leaveRequests.find(x=>x.id===id); if (!r) return;
+  r.status = status; r.decidedAt = new Date().toISOString();
+  // deduct from balance if approved PTO
+  if (status==='Approved' && r.type==='PTO / Personal') {
+    const e = employees.find(x=>x.name===r.employee);
+    if (e) { e.ptoUsed = (parseFloat(e.ptoUsed)||0) + parseFloat(r.days); saveEmployeesStorage(); renderEmployees(); }
+  }
+  if (status==='Approved' && r.type==='Unpaid Time Off') {
+    const e = employees.find(x=>x.name===r.employee);
+    if (e) { e.unpaid = (parseFloat(e.unpaid)||0) + parseFloat(r.days); saveEmployeesStorage(); renderEmployees(); }
+  }
+  if (status==='Approved' && r.type==='Military Leave') {
+    const e = employees.find(x=>x.name===r.employee);
+    if (e) { e.military = (parseFloat(e.military)||0) + parseFloat(r.days); saveEmployeesStorage(); renderEmployees(); }
+  }
+  saveLR(); renderLeaveRequests();
+  emailEmployee(id, status);
+}
+function emailEmployee(id, statusOverride) {
+  const r = leaveRequests.find(x=>x.id===id); if (!r) return;
+  const e = employees.find(x=>x.name===r.employee);
+  if (!e || !e.email) { alert('No email on file for '+r.employee); return; }
+  const status = statusOverride || r.status;
+  const subj = encodeURIComponent(`Your leave request — ${status}`);
+  const body = encodeURIComponent(
+    `Hi ${r.employee.split(' ')[0]},\n\nYour leave request has been ${status.toLowerCase()}:\n\n`+
+    `Type: ${r.type}\nDates: ${r.start} to ${r.end}\nDays: ${r.days}\n\n— Pointer Financial Group`);
+  window.open(`mailto:${e.email}?subject=${subj}&body=${body}`);
+}
+function exportLRIcs(id) {
+  const r = leaveRequests.find(x=>x.id===id); if (!r) return;
+  const dtStart = r.start.replace(/-/g,'');
+  const endDate = new Date(r.end); endDate.setDate(endDate.getDate()+1);
+  const dtEnd = endDate.toISOString().slice(0,10).replace(/-/g,'');
+  const ics = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//PFG//Dashboard//EN\nBEGIN:VEVENT\nUID:${id}@pointerfg\nDTSTART;VALUE=DATE:${dtStart}\nDTEND;VALUE=DATE:${dtEnd}\nSUMMARY:${r.employee} — ${r.type}\nDESCRIPTION:${r.notes||''}\nEND:VEVENT\nEND:VCALENDAR`;
+  downloadFile(`leave-${r.employee.replace(/\s/g,'_')}.ics`, ics);
+}
+function downloadFile(name, content) {
+  const blob = new Blob([content], {type:'text/calendar'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
+}
+function exportLeaveExcel() {
+  const ws = XLSX.utils.json_to_sheet(leaveRequests);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Leave Requests');
+  XLSX.writeFile(wb, 'leave_requests.xlsx');
+}
 
+// ============ CALENDAR ============
+const TRADING_HOLIDAYS = {
+  '2025-01-01':"New Year's Day",'2025-01-09':"Day of Mourning",
+  '2025-01-20':"MLK Jr. Day",'2025-02-17':"Presidents' Day",
+  '2025-04-18':"Good Friday",'2025-05-26':"Memorial Day",
+  '2025-06-19':"Juneteenth",'2025-07-04':"Independence Day",
+  '2025-09-01':"Labor Day",'2025-11-27':"Thanksgiving",'2025-12-25':"Christmas Day",
+  '2026-01-01':"New Year's Day",'2026-01-19':"MLK Jr. Day",
+  '2026-02-16':"Presidents' Day",'2026-04-03':"Good Friday",
+  '2026-05-25':"Memorial Day",'2026-06-19':"Juneteenth",
+  '2026-07-03':"Independence Day (Obs)",'2026-09-07':"Labor Day",
+  '2026-11-26':"Thanksgiving",'2026-12-25':"Christmas Day"
+};
 let calDate = new Date();
 function changeMonth(d){ calDate.setMonth(calDate.getMonth()+d); renderCalendar(); }
 function goToday(){ calDate = new Date(); renderCalendar(); }
-
 function renderCalendar() {
   const y = calDate.getFullYear(), m = calDate.getMonth();
   const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  document.getElementById('calMonthLabel').innerText = `${monthNames[m]} ${y}`;
-  const first = new Date(y,m,1);
-  const last = new Date(y,m+1,0);
+  const lbl = document.getElementById('calMonthLabel'); if (lbl) lbl.innerText = `${monthNames[m]} ${y}`;
+  const first = new Date(y,m,1); const last = new Date(y,m+1,0);
   const today = new Date();
-
   let html = '';
   ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=> html += `<div class="head">${d}</div>`);
   for (let i=0;i<first.getDay();i++) html += '<div></div>';
@@ -425,12 +658,59 @@ function renderCalendar() {
     const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const holiday = TRADING_HOLIDAYS[dateStr];
     const isToday = (today.getFullYear()===y && today.getMonth()===m && today.getDate()===d);
-    html += `<div class="${holiday?'holiday':''} ${isToday?'today':''}">
-      <b>${d}</b>${holiday?`<br><span style="color:#856404;">${holiday}</span>`:''}
-    </div>`;
+    const ptos = leaveRequests.filter(r => r.status==='Approved' && dateStr>=r.start && dateStr<=r.end);
+    let cls = '';
+    if (holiday) cls += ' holiday';
+    if (ptos.length) cls += ' pto';
+    if (isToday) cls += ' today';
+    let inner = `<b>${d}</b>`;
+    if (holiday) inner += `<br><span style="color:#856404;">${holiday}</span>`;
+    ptos.forEach(p => inner += `<br><span style="color:#155724;">${p.employee.split(' ')[0]} (${p.type.split(' ')[0]})</span>`);
+    html += `<div class="${cls}">${inner}</div>`;
   }
-  document.getElementById('calendar').innerHTML = html;
+  const cal = document.getElementById('calendar'); if (cal) cal.innerHTML = html;
 }
+function exportHolidaysICS() {
+  let ics = 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//PFG//Holidays//EN\n';
+  Object.entries(TRADING_HOLIDAYS).forEach(([date,name])=>{
+    const d = date.replace(/-/g,'');
+    const next = new Date(date); next.setDate(next.getDate()+1);
+    const dn = next.toISOString().slice(0,10).replace(/-/g,'');
+    ics += `BEGIN:VEVENT\nUID:${d}@pfg\nDTSTART;VALUE=DATE:${d}\nDTEND;VALUE=DATE:${dn}\nSUMMARY:Trading Holiday — ${name}\nEND:VEVENT\n`;
+  });
+  ics += 'END:VCALENDAR';
+  downloadFile('pfg_trading_holidays.ics', ics);
+}
+
+// ============ DOCUMENTS ============
+let docs = [];
+function loadDocs() {
+  const saved = localStorage.getItem('docs');
+  docs = saved ? JSON.parse(saved) : [];
+  renderDocs();
+}
+function saveDocsStorage(){ localStorage.setItem('docs', JSON.stringify(docs)); }
+function saveDoc() {
+  const emp = document.getElementById('docEmp').value;
+  const type = document.getElementById('docType').value;
+  const date = document.getElementById('docDate').value;
+  const notes = document.getElementById('docNotes').value;
+  if (!emp||!type||!date) { alert('Fill all fields'); return; }
+  const idx = docs.findIndex(d=>d.employee===emp && d.type===type);
+  const rec = { employee:emp, type, date, notes };
+  if (idx>=0) docs[idx]=rec; else docs.push(rec);
+  saveDocsStorage(); renderDocs(); renderEmployees();
+  alert('Saved.');
+}
+function renderDocs() {
+  let html = '<tr><th>Employee</th><th>Document</th><th>Date Signed</th><th>Notes</th><th></th></tr>';
+  docs.forEach((d,i)=>{
+    html += `<tr><td>${d.employee}</td><td>${d.type}</td><td>${d.date}</td><td>${d.notes||''}</td>
+      <td><button class="btn small danger" onclick="delDoc(${i})">×</button></td></tr>`;
+  });
+  document.getElementById('docsTable').innerHTML = html;
+}
+function delDoc(i){ if (!confirm('Delete?')) return; docs.splice(i,1); saveDocsStorage(); renderDocs(); renderEmployees(); }
 </script>
 </body>
 </html>
