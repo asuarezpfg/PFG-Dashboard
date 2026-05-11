@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Portfolio Dashboard</title>
+<title>Pointer Financial Group Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -10,23 +10,41 @@
   body { font-family: -apple-system, Arial, sans-serif; margin: 0; background: #f4f6f8; }
   .login { max-width: 320px; margin: 100px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.1); }
   .login input { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; }
-  .login button, .btn { background: #1f4e79; color: white; border: none; padding: 10px 20px; cursor: pointer; border-radius: 4px; }
-  .app { display: none; padding: 20px; }
-  header { background: #1f4e79; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+  .login button, .btn { background: #1f4e79; color: white; border: none; padding: 10px 18px; cursor: pointer; border-radius: 4px; font-size: 14px; }
+  .btn.small { padding: 5px 10px; font-size: 12px; }
+  .btn.danger { background: #c00000; }
+  .app { display: none; }
+  header { background: #1f4e79; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; }
+  header h2 { margin: 0; }
+  nav { background: #2d3e50; padding: 0 25px; display: flex; }
+  nav button { background: none; border: none; color: #cdd6e0; padding: 14px 22px; cursor: pointer; font-size: 14px; border-bottom: 3px solid transparent; }
+  nav button.active { color: white; border-bottom-color: #4a90c8; background: #1f4e79; }
+  .tab { display: none; padding: 20px; }
+  .tab.active { display: block; }
   .card { background: white; padding: 20px; border-radius: 8px; margin: 15px 0; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
   table { width: 100%; border-collapse: collapse; }
   th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
   th { background: #f0f3f7; }
-  select, input[type=file] { padding: 8px; margin: 5px; }
+  select, input[type=file], input[type=text], input[type=date], input[type=number] { padding: 8px; margin: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
   .row { display: flex; gap: 15px; flex-wrap: wrap; }
   .col { flex: 1; min-width: 300px; }
+  .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .badge.green { background: #d4edda; color: #155724; }
+  .badge.orange { background: #fff3cd; color: #856404; }
+  .calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-day { padding: 10px; background: #f8f9fa; border-radius: 4px; min-height: 60px; font-size: 12px; }
+  .cal-day.holiday { background: #ffe0e0; border-left: 4px solid #c00000; }
+  .cal-day.header { background: #1f4e79; color: white; text-align: center; font-weight: 600; min-height: auto; padding: 8px; }
+  .cal-day .date { font-weight: 600; font-size: 14px; }
+  .cal-day .event { color: #c00000; font-size: 11px; margin-top: 4px; }
 </style>
 </head>
 <body>
 
 <!-- LOGIN -->
 <div id="loginScreen" class="login">
-  <h2>Team Login</h2>
+  <h2>Pointer Financial Group</h2>
+  <p style="color:#666;font-size:13px;">Internal Team Portal</p>
   <input type="text" id="username" placeholder="Username">
   <input type="password" id="password" placeholder="Password">
   <button onclick="login()">Sign In</button>
@@ -36,73 +54,136 @@
 <!-- APP -->
 <div id="app" class="app">
   <header>
-    <h2>Portfolio Models Dashboard</h2>
-    <button class="btn" onclick="logout()">Logout</button>
+    <h2>Pointer Financial Group — Internal Dashboard</h2>
+    <div>
+      <span id="userLabel" style="margin-right:15px;font-size:13px;"></span>
+      <button class="btn" onclick="logout()">Logout</button>
+    </div>
   </header>
 
-  <div class="card">
-    <h3>Upload Model (CSV)</h3>
-    <input type="file" id="csvFile" accept=".csv" onchange="handleCSV(event)">
-    <p style="font-size:13px;color:#666;">Expected columns: Model, Description, Symbol, Target Percent, Minimum Percent, Maximum Percent</p>
-  </div>
+  <nav>
+    <button class="active" onclick="showTab('investments', this)">Investments</button>
+    <button onclick="showTab('hr', this)">Human Resources</button>
+  </nav>
 
-  <div class="card">
-    <h3>Select Model</h3>
-    <select id="modelSelect" onchange="renderModel()"></select>
-    <button class="btn" onclick="exportExcel()">Export to Excel</button>
-    <button class="btn" onclick="loadBenchmarks()">Refresh Benchmarks</button>
-  </div>
-
-  <div class="row">
-    <div class="col card">
-      <h3>Model Holdings</h3>
-      <table id="holdingsTable"></table>
+  <!-- ===== INVESTMENTS TAB ===== -->
+  <div id="investments" class="tab active">
+    <div class="card">
+      <h3>Upload Model (CSV)</h3>
+      <input type="file" id="csvFile" accept=".csv" onchange="handleCSV(event)">
+      <p style="font-size:13px;color:#666;">Expected columns: Model, Description, Symbol, Target Percent, Minimum Percent, Maximum Percent</p>
     </div>
-    <div class="col card">
-      <h3>Allocation</h3>
-      <canvas id="allocChart"></canvas>
+
+    <div class="card">
+      <h3>Select Model</h3>
+      <select id="modelSelect" onchange="renderModel()"></select>
+      <button class="btn" onclick="exportExcel()">Export to Excel</button>
+      <button class="btn" onclick="loadBenchmarks()">Refresh Benchmarks</button>
+      <button class="btn danger" onclick="deleteModel()">Delete Selected Model</button>
+    </div>
+
+    <div class="row">
+      <div class="col card">
+        <h3>Model Holdings</h3>
+        <table id="holdingsTable"></table>
+      </div>
+      <div class="col card">
+        <h3>Allocation</h3>
+        <canvas id="allocChart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Benchmarks (YTD Performance)</h3>
+      <table id="benchTable">
+        <tr><th>Index</th><th>Symbol</th><th>Latest Price</th><th>YTD %</th></tr>
+      </table>
+      <canvas id="benchChart" style="margin-top:20px;"></canvas>
     </div>
   </div>
 
-  <div class="card">
-    <h3>Benchmarks (YTD Performance)</h3>
-    <table id="benchTable">
-      <tr><th>Index</th><th>Symbol</th><th>Latest Price</th><th>YTD %</th></tr>
-    </table>
-    <canvas id="benchChart" style="margin-top:20px;"></canvas>
+  <!-- ===== HR TAB ===== -->
+  <div id="hr" class="tab">
+    <div class="card">
+      <h3>Add Employee</h3>
+      <input type="text" id="empName" placeholder="Full Name">
+      <input type="date" id="empHire" placeholder="Date of Hire">
+      <input type="number" id="empPTO" placeholder="PTO Days Allotted" value="15">
+      <input type="number" id="empUnpaid" placeholder="Unpaid Days Used" value="0">
+      <input type="number" id="empUsed" placeholder="PTO Days Used" value="0">
+      <button class="btn" onclick="addEmployee()">Add</button>
+    </div>
+
+    <div class="card">
+      <h3>Employee Directory</h3>
+      <table id="empTable">
+        <tr>
+          <th>Name</th><th>Date of Hire</th><th>Years</th>
+          <th>PTO Allotted</th><th>PTO Used</th><th>PTO Remaining</th>
+          <th>Unpaid Days Used</th><th>Actions</th>
+        </tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Master Calendar — 2025 NYSE Trading Holidays</h3>
+      <p style="font-size:13px;color:#666;">Markets are closed on these days. Plan trades around them via iRebal.</p>
+      <table id="holidayTable">
+        <tr><th>Date</th><th>Day</th><th>Holiday</th><th>Status</th></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Calendar View — Current Month</h3>
+      <div style="margin-bottom:10px;">
+        <button class="btn small" onclick="changeMonth(-1)">◀ Prev</button>
+        <span id="calLabel" style="font-weight:600;margin:0 15px;"></span>
+        <button class="btn small" onclick="changeMonth(1)">Next ▶</button>
+      </div>
+      <div id="calendarGrid" class="calendar"></div>
+    </div>
   </div>
 </div>
 
 <script>
-// ---- SIMPLE LOGIN (change these) ----
+// ===== LOGIN =====
 const USERS = {
-  "user1": "changeme1",
-  "user2": "changeme2"
+  "asuarez": "PFGBrooky!",
+  "mbruce": "PFGBrooky!"
 };
 
 function login() {
-  const u = document.getElementById('username').value;
+  const u = document.getElementById('username').value.trim().toLowerCase();
   const p = document.getElementById('password').value;
   if (USERS[u] && USERS[u] === p) {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
+    document.getElementById('userLabel').innerText = 'Signed in as: ' + u;
     loadStoredModels();
     loadBenchmarks();
+    loadEmployees();
+    renderHolidays();
+    renderCalendar();
   } else {
     document.getElementById('loginError').innerText = "Invalid credentials";
   }
 }
 function logout() { location.reload(); }
 
-// ---- MODEL STORAGE (localStorage) ----
-let models = {};
+function showTab(id, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+}
 
+// ===== MODELS =====
+let models = {};
 function loadStoredModels() {
   const saved = localStorage.getItem('models');
   if (saved) models = JSON.parse(saved);
   refreshModelSelect();
 }
-
 function refreshModelSelect() {
   const sel = document.getElementById('modelSelect');
   sel.innerHTML = '';
@@ -112,8 +193,8 @@ function refreshModelSelect() {
     sel.add(o);
   });
   if (Object.keys(models).length) renderModel();
+  else document.getElementById('holdingsTable').innerHTML = '<tr><td>No models uploaded yet</td></tr>';
 }
-
 function handleCSV(e) {
   const file = e.target.files[0];
   Papa.parse(file, {
@@ -132,6 +213,15 @@ function handleCSV(e) {
     }
   });
 }
+function deleteModel() {
+  const m = document.getElementById('modelSelect').value;
+  if (!m) return;
+  if (confirm('Delete model "' + m + '"?')) {
+    delete models[m];
+    localStorage.setItem('models', JSON.stringify(models));
+    refreshModelSelect();
+  }
+}
 
 let allocChartObj;
 function renderModel() {
@@ -145,7 +235,6 @@ function renderModel() {
     values.push(parseFloat(r['Target Percent']) || 0);
   });
   document.getElementById('holdingsTable').innerHTML = html;
-
   if (allocChartObj) allocChartObj.destroy();
   allocChartObj = new Chart(document.getElementById('allocChart'), {
     type: 'doughnut',
@@ -153,20 +242,18 @@ function renderModel() {
   });
 }
 
-// ---- BENCHMARKS (Yahoo Finance via free proxy) ----
+// ===== BENCHMARKS =====
 const BENCHMARKS = [
   { name: 'S&P 500', symbol: '^GSPC' },
   { name: 'Dow Jones', symbol: '^DJI' },
   { name: 'Nasdaq Composite', symbol: '^IXIC' }
 ];
-
 async function loadBenchmarks() {
   const tbl = document.getElementById('benchTable');
   tbl.innerHTML = '<tr><th>Index</th><th>Symbol</th><th>Latest</th><th>YTD %</th></tr>';
   const datasets = [];
   for (const b of BENCHMARKS) {
     try {
-      // Using a public CORS proxy to reach Yahoo Finance
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${b.symbol}?range=ytd&interval=1d`;
       const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
       const res = await fetch(proxy);
@@ -189,7 +276,6 @@ async function loadBenchmarks() {
   }
   renderBenchChart(datasets);
 }
-
 let benchChartObj;
 function renderBenchChart(datasets) {
   if (benchChartObj) benchChartObj.destroy();
@@ -210,7 +296,7 @@ function renderBenchChart(datasets) {
   });
 }
 
-// ---- EXCEL EXPORT ----
+// ===== EXCEL EXPORT =====
 function exportExcel() {
   const m = document.getElementById('modelSelect').value;
   const data = models[m] || [];
@@ -218,6 +304,124 @@ function exportExcel() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, m.substring(0,30));
   XLSX.writeFile(wb, `${m}.xlsx`);
+}
+
+// ===== HR / EMPLOYEES =====
+let employees = [];
+function loadEmployees() {
+  const saved = localStorage.getItem('employees');
+  if (saved) {
+    employees = JSON.parse(saved);
+  } else {
+    // placeholder employees
+    employees = [
+      { name: 'Alex Suarez', hire: '2022-03-15', pto: 20, used: 5, unpaid: 0 },
+      { name: 'Matt Bruce', hire: '2021-07-01', pto: 20, used: 8, unpaid: 1 },
+      { name: 'Jane Placeholder', hire: '2023-09-12', pto: 15, used: 3, unpaid: 0 },
+      { name: 'John Placeholder', hire: '2024-01-08', pto: 15, used: 1, unpaid: 0 }
+    ];
+    localStorage.setItem('employees', JSON.stringify(employees));
+  }
+  renderEmployees();
+}
+function addEmployee() {
+  const name = document.getElementById('empName').value.trim();
+  const hire = document.getElementById('empHire').value;
+  const pto = parseFloat(document.getElementById('empPTO').value) || 0;
+  const used = parseFloat(document.getElementById('empUsed').value) || 0;
+  const unpaid = parseFloat(document.getElementById('empUnpaid').value) || 0;
+  if (!name || !hire) { alert('Name and hire date required'); return; }
+  employees.push({ name, hire, pto, used, unpaid });
+  localStorage.setItem('employees', JSON.stringify(employees));
+  document.getElementById('empName').value = '';
+  document.getElementById('empHire').value = '';
+  renderEmployees();
+}
+function deleteEmployee(i) {
+  if (confirm('Remove this employee?')) {
+    employees.splice(i, 1);
+    localStorage.setItem('employees', JSON.stringify(employees));
+    renderEmployees();
+  }
+}
+function renderEmployees() {
+  const tbl = document.getElementById('empTable');
+  let html = `<tr><th>Name</th><th>Date of Hire</th><th>Years</th>
+    <th>PTO Allotted</th><th>PTO Used</th><th>PTO Remaining</th>
+    <th>Unpaid Days</th><th>Actions</th></tr>`;
+  employees.forEach((e, i) => {
+    const years = ((new Date() - new Date(e.hire)) / (365.25 * 24 * 3600 * 1000)).toFixed(1);
+    const remaining = e.pto - e.used;
+    const badge = remaining > 5 ? 'green' : 'orange';
+    html += `<tr>
+      <td>${e.name}</td>
+      <td>${e.hire}</td>
+      <td>${years}</td>
+      <td>${e.pto}</td>
+      <td>${e.used}</td>
+      <td><span class="badge ${badge}">${remaining}</span></td>
+      <td>${e.unpaid}</td>
+      <td><button class="btn small danger" onclick="deleteEmployee(${i})">Remove</button></td>
+    </tr>`;
+  });
+  tbl.innerHTML = html;
+}
+
+// ===== TRADING HOLIDAYS (NYSE 2025) =====
+const HOLIDAYS_2025 = [
+  { date: '2025-01-01', name: "New Year's Day" },
+  { date: '2025-01-20', name: 'Martin Luther King, Jr. Day' },
+  { date: '2025-02-17', name: "Presidents' Day" },
+  { date: '2025-04-18', name: 'Good Friday' },
+  { date: '2025-05-26', name: 'Memorial Day' },
+  { date: '2025-06-19', name: 'Juneteenth' },
+  { date: '2025-07-04', name: 'Independence Day' },
+  { date: '2025-09-01', name: 'Labor Day' },
+  { date: '2025-11-27', name: 'Thanksgiving Day' },
+  { date: '2025-12-25', name: 'Christmas Day' }
+];
+function renderHolidays() {
+  const tbl = document.getElementById('holidayTable');
+  let html = '<tr><th>Date</th><th>Day</th><th>Holiday</th><th>Status</th></tr>';
+  const today = new Date();
+  HOLIDAYS_2025.forEach(h => {
+    const d = new Date(h.date + 'T00:00:00');
+    const day = d.toLocaleDateString('en-US', { weekday: 'long' });
+    const status = d < today ? '<span class="badge green">Past</span>' : '<span class="badge orange">Upcoming</span>';
+    html += `<tr><td>${h.date}</td><td>${day}</td><td>${h.name}</td><td>${status}</td></tr>`;
+  });
+  tbl.innerHTML = html;
+}
+
+// ===== CALENDAR GRID =====
+let calDate = new Date();
+function changeMonth(delta) {
+  calDate.setMonth(calDate.getMonth() + delta);
+  renderCalendar();
+}
+function renderCalendar() {
+  const grid = document.getElementById('calendarGrid');
+  const year = calDate.getFullYear();
+  const month = calDate.getMonth();
+  document.getElementById('calLabel').innerText =
+    calDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let html = '';
+  days.forEach(d => html += `<div class="cal-day header">${d}</div>`);
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  for (let i = 0; i < firstDay; i++) html += '<div class="cal-day"></div>';
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const holiday = HOLIDAYS_2025.find(h => h.date === iso);
+    const cls = holiday ? 'cal-day holiday' : 'cal-day';
+    const ev = holiday ? `<div class="event">${holiday.name}</div>` : '';
+    html += `<div class="${cls}"><div class="date">${d}</div>${ev}</div>`;
+  }
+  grid.innerHTML = html;
 }
 </script>
 </body>
