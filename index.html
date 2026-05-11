@@ -8,35 +8,32 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   body { font-family: -apple-system, Arial, sans-serif; margin: 0; background: #f4f6f8; }
-  .login { max-width: 320px; margin: 100px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.1); }
+  .login { max-width: 340px; margin: 100px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.1); }
   .login input { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; }
   .login button, .btn { background: #1f4e79; color: white; border: none; padding: 10px 18px; cursor: pointer; border-radius: 4px; font-size: 14px; }
-  .btn.small { padding: 5px 10px; font-size: 12px; }
-  .btn.danger { background: #c00000; }
+  .btn.alt { background: #555; }
+  .btn.danger { background: #b33; }
   .app { display: none; }
   header { background: #1f4e79; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; }
-  header h2 { margin: 0; }
-  nav { background: #2d3e50; padding: 0 25px; display: flex; }
-  nav button { background: none; border: none; color: #cdd6e0; padding: 14px 22px; cursor: pointer; font-size: 14px; border-bottom: 3px solid transparent; }
-  nav button.active { color: white; border-bottom-color: #4a90c8; background: #1f4e79; }
-  .tab { display: none; padding: 20px; }
-  .tab.active { display: block; }
+  nav { background: #2c5f8d; padding: 0 25px; display: flex; gap: 5px; }
+  nav button { background: transparent; color: #cfd8e3; border: none; padding: 14px 20px; cursor: pointer; font-size: 14px; border-bottom: 3px solid transparent; }
+  nav button.active { color: white; border-bottom: 3px solid #fff; font-weight: bold; }
+  .page { display: none; padding: 20px 25px; }
+  .page.active { display: block; }
   .card { background: white; padding: 20px; border-radius: 8px; margin: 15px 0; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
   table { width: 100%; border-collapse: collapse; }
   th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
   th { background: #f0f3f7; }
-  select, input[type=file], input[type=text], input[type=date], input[type=number] { padding: 8px; margin: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+  select, input[type=file], input[type=text], input[type=date], input[type=number] { padding: 8px; margin: 4px; box-sizing: border-box; }
   .row { display: flex; gap: 15px; flex-wrap: wrap; }
   .col { flex: 1; min-width: 300px; }
-  .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
-  .badge.green { background: #d4edda; color: #155724; }
-  .badge.orange { background: #fff3cd; color: #856404; }
-  .calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-  .cal-day { padding: 10px; background: #f8f9fa; border-radius: 4px; min-height: 60px; font-size: 12px; }
-  .cal-day.holiday { background: #ffe0e0; border-left: 4px solid #c00000; }
-  .cal-day.header { background: #1f4e79; color: white; text-align: center; font-weight: 600; min-height: auto; padding: 8px; }
-  .cal-day .date { font-weight: 600; font-size: 14px; }
-  .cal-day .event { color: #c00000; font-size: 11px; margin-top: 4px; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; background:#e8eef5; color:#1f4e79; }
+  .cal { display: grid; grid-template-columns: repeat(7,1fr); gap: 4px; }
+  .cal div { background: #fafbfc; border:1px solid #eee; padding: 8px; min-height: 60px; font-size: 12px; border-radius: 4px; }
+  .cal .head { background:#1f4e79; color:white; text-align:center; font-weight:bold; min-height:auto; }
+  .cal .holiday { background:#fff3cd; border-color:#ffe69c; }
+  .cal .today { outline: 2px solid #1f4e79; }
+  h2,h3 { color:#1f4e79; }
 </style>
 </head>
 <body>
@@ -44,7 +41,7 @@
 <!-- LOGIN -->
 <div id="loginScreen" class="login">
   <h2>Pointer Financial Group</h2>
-  <p style="color:#666;font-size:13px;">Internal Team Portal</p>
+  <p style="font-size:13px;color:#666;">Internal Team Login</p>
   <input type="text" id="username" placeholder="Username">
   <input type="password" id="password" placeholder="Password">
   <button onclick="login()">Sign In</button>
@@ -54,24 +51,24 @@
 <!-- APP -->
 <div id="app" class="app">
   <header>
-    <h2>Pointer Financial Group — Internal Dashboard</h2>
+    <h2 style="margin:0;">Pointer Financial Group — Internal Dashboard</h2>
     <div>
-      <span id="userLabel" style="margin-right:15px;font-size:13px;"></span>
-      <button class="btn" onclick="logout()">Logout</button>
+      <span id="whoami" style="margin-right:15px;font-size:13px;"></span>
+      <button class="btn alt" onclick="logout()">Logout</button>
     </div>
   </header>
-
   <nav>
-    <button class="active" onclick="showTab('investments', this)">Investments</button>
-    <button onclick="showTab('hr', this)">Human Resources</button>
+    <button id="tab-inv" class="active" onclick="showPage('inv')">Investments</button>
+    <button id="tab-hr" onclick="showPage('hr')">Human Resources</button>
   </nav>
 
-  <!-- ===== INVESTMENTS TAB ===== -->
-  <div id="investments" class="tab active">
+  <!-- INVESTMENTS PAGE -->
+  <div id="page-inv" class="page active">
     <div class="card">
       <h3>Upload Model (CSV)</h3>
       <input type="file" id="csvFile" accept=".csv" onchange="handleCSV(event)">
       <p style="font-size:13px;color:#666;">Expected columns: Model, Description, Symbol, Target Percent, Minimum Percent, Maximum Percent</p>
+      <button class="btn danger" onclick="clearModels()">Clear All Models</button>
     </div>
 
     <div class="card">
@@ -79,7 +76,6 @@
       <select id="modelSelect" onchange="renderModel()"></select>
       <button class="btn" onclick="exportExcel()">Export to Excel</button>
       <button class="btn" onclick="loadBenchmarks()">Refresh Benchmarks</button>
-      <button class="btn danger" onclick="deleteModel()">Delete Selected Model</button>
     </div>
 
     <div class="row">
@@ -95,74 +91,67 @@
 
     <div class="card">
       <h3>Benchmarks (YTD Performance)</h3>
+      <p style="font-size:13px;color:#666;">Your selected model's weighted YTD return is shown for comparison (based on each holding's YTD price change).</p>
       <table id="benchTable">
-        <tr><th>Index</th><th>Symbol</th><th>Latest Price</th><th>YTD %</th></tr>
+        <tr><th>Index / Model</th><th>Symbol</th><th>Latest</th><th>YTD %</th></tr>
       </table>
       <canvas id="benchChart" style="margin-top:20px;"></canvas>
     </div>
   </div>
 
-  <!-- ===== HR TAB ===== -->
-  <div id="hr" class="tab">
-    <div class="card">
-      <h3>Add Employee</h3>
-      <input type="text" id="empName" placeholder="Full Name">
-      <input type="date" id="empHire" placeholder="Date of Hire">
-      <input type="number" id="empPTO" placeholder="PTO Days Allotted" value="15">
-      <input type="number" id="empUnpaid" placeholder="Unpaid Days Used" value="0">
-      <input type="number" id="empUsed" placeholder="PTO Days Used" value="0">
-      <button class="btn" onclick="addEmployee()">Add</button>
-    </div>
-
-    <div class="card">
-      <h3>Employee Directory</h3>
-      <table id="empTable">
-        <tr>
-          <th>Name</th><th>Date of Hire</th><th>Years</th>
-          <th>PTO Allotted</th><th>PTO Used</th><th>PTO Remaining</th>
-          <th>Unpaid Days Used</th><th>Actions</th>
-        </tr>
-      </table>
-    </div>
-
-    <div class="card">
-      <h3>Master Calendar — 2025 NYSE Trading Holidays</h3>
-      <p style="font-size:13px;color:#666;">Markets are closed on these days. Plan trades around them via iRebal.</p>
-      <table id="holidayTable">
-        <tr><th>Date</th><th>Day</th><th>Holiday</th><th>Status</th></tr>
-      </table>
-    </div>
-
-    <div class="card">
-      <h3>Calendar View — Current Month</h3>
-      <div style="margin-bottom:10px;">
-        <button class="btn small" onclick="changeMonth(-1)">◀ Prev</button>
-        <span id="calLabel" style="font-weight:600;margin:0 15px;"></span>
-        <button class="btn small" onclick="changeMonth(1)">Next ▶</button>
+  <!-- HR PAGE -->
+  <div id="page-hr" class="page">
+    <div class="row">
+      <div class="col card">
+        <h3>Employees</h3>
+        <table id="empTable">
+          <tr><th>Name</th><th>Date of Hire</th><th>PTO Used</th><th>Unpaid TO</th><th>PTO Balance</th><th></th></tr>
+        </table>
+        <h4 style="margin-top:20px;">Add / Update Employee</h4>
+        <input type="text" id="empName" placeholder="Name">
+        <input type="date" id="empHire" placeholder="Date of Hire">
+        <input type="number" id="empPTO" placeholder="PTO used (days)" step="0.5">
+        <input type="number" id="empUnpaid" placeholder="Unpaid TO (days)" step="0.5">
+        <input type="number" id="empAllot" placeholder="Annual PTO allotment" step="0.5" value="15">
+        <button class="btn" onclick="saveEmployee()">Save Employee</button>
       </div>
-      <div id="calendarGrid" class="calendar"></div>
+      <div class="col card">
+        <h3>Quick Stats</h3>
+        <div id="hrStats"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Master Calendar — <span id="calMonthLabel"></span></h3>
+      <button class="btn alt" onclick="changeMonth(-1)">◀ Prev</button>
+      <button class="btn alt" onclick="changeMonth(1)">Next ▶</button>
+      <button class="btn" onclick="goToday()">Today</button>
+      <p style="font-size:13px;color:#666;margin-top:10px;">
+        <span class="pill" style="background:#fff3cd;">Trading Holiday</span>
+        Markets closed on highlighted dates (NYSE/Nasdaq schedule).
+      </p>
+      <div id="calendar" class="cal"></div>
     </div>
   </div>
 </div>
 
 <script>
-// ===== LOGIN =====
+// ============ LOGIN ============
 const USERS = {
   "asuarez": "PFGBrooky!",
-  "mbruce": "PFGBrooky!"
+  "mbruce":  "PFGBrooky!"
 };
 
 function login() {
-  const u = document.getElementById('username').value.trim().toLowerCase();
+  const u = document.getElementById('username').value.trim();
   const p = document.getElementById('password').value;
   if (USERS[u] && USERS[u] === p) {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
-    document.getElementById('userLabel').innerText = 'Signed in as: ' + u;
+    document.getElementById('whoami').innerText = "Signed in as: " + u;
     loadStoredModels();
     loadBenchmarks();
     loadEmployees();
-    renderHolidays();
     renderCalendar();
   } else {
     document.getElementById('loginError').innerText = "Invalid credentials";
@@ -170,57 +159,54 @@ function login() {
 }
 function logout() { location.reload(); }
 
-function showTab(id, btn) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+// ============ TABS ============
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  btn.classList.add('active');
+  document.getElementById('page-'+id).classList.add('active');
+  document.getElementById('tab-'+id).classList.add('active');
 }
 
-// ===== MODELS =====
+// ============ INVESTMENTS ============
 let models = {};
+
 function loadStoredModels() {
   const saved = localStorage.getItem('models');
   if (saved) models = JSON.parse(saved);
   refreshModelSelect();
 }
+function clearModels() {
+  if (!confirm('Delete all uploaded models?')) return;
+  models = {};
+  localStorage.removeItem('models');
+  refreshModelSelect();
+  document.getElementById('holdingsTable').innerHTML='';
+  if (allocChartObj) allocChartObj.destroy();
+}
 function refreshModelSelect() {
   const sel = document.getElementById('modelSelect');
   sel.innerHTML = '';
   Object.keys(models).forEach(m => {
-    const o = document.createElement('option');
-    o.value = m; o.text = m;
-    sel.add(o);
+    const o = document.createElement('option'); o.value=m; o.text=m; sel.add(o);
   });
   if (Object.keys(models).length) renderModel();
-  else document.getElementById('holdingsTable').innerHTML = '<tr><td>No models uploaded yet</td></tr>';
 }
 function handleCSV(e) {
   const file = e.target.files[0];
   Papa.parse(file, {
-    header: true,
-    skipEmptyLines: true,
+    header: true, skipEmptyLines: true,
     complete: function(results) {
       results.data.forEach(row => {
-        const m = row.Model;
-        if (!m) return;
+        const m = row.Model; if (!m) return;
         if (!models[m]) models[m] = [];
         models[m].push(row);
       });
       localStorage.setItem('models', JSON.stringify(models));
       refreshModelSelect();
       alert('Model loaded!');
+      loadBenchmarks();
     }
   });
-}
-function deleteModel() {
-  const m = document.getElementById('modelSelect').value;
-  if (!m) return;
-  if (confirm('Delete model "' + m + '"?')) {
-    delete models[m];
-    localStorage.setItem('models', JSON.stringify(models));
-    refreshModelSelect();
-  }
 }
 
 let allocChartObj;
@@ -237,66 +223,89 @@ function renderModel() {
   document.getElementById('holdingsTable').innerHTML = html;
   if (allocChartObj) allocChartObj.destroy();
   allocChartObj = new Chart(document.getElementById('allocChart'), {
-    type: 'doughnut',
-    data: { labels, datasets: [{ data: values }] }
+    type: 'doughnut', data: { labels, datasets: [{ data: values }] }
   });
 }
 
-// ===== BENCHMARKS =====
+// ============ BENCHMARKS ============
 const BENCHMARKS = [
-  { name: 'S&P 500', symbol: '^GSPC' },
-  { name: 'Dow Jones', symbol: '^DJI' },
-  { name: 'Nasdaq Composite', symbol: '^IXIC' }
+  { name: 'S&P 500', symbol: '^GSPC', color:'#1f4e79' },
+  { name: 'Dow Jones', symbol: '^DJI', color:'#c00000' },
+  { name: 'Nasdaq Composite', symbol: '^IXIC', color:'#00b050' }
 ];
+
+async function fetchYahoo(symbol) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=ytd&interval=1d`;
+  const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+  const res = await fetch(proxy);
+  const json = await res.json();
+  const r = json.chart.result[0];
+  const closes = r.indicators.quote[0].close;
+  const ts = r.timestamp;
+  return { closes, ts };
+}
+
 async function loadBenchmarks() {
   const tbl = document.getElementById('benchTable');
-  tbl.innerHTML = '<tr><th>Index</th><th>Symbol</th><th>Latest</th><th>YTD %</th></tr>';
+  tbl.innerHTML = '<tr><th>Index / Model</th><th>Symbol</th><th>Latest</th><th>YTD %</th></tr>';
   const datasets = [];
   for (const b of BENCHMARKS) {
     try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${b.symbol}?range=ytd&interval=1d`;
-      const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-      const res = await fetch(proxy);
-      const json = await res.json();
-      const result = json.chart.result[0];
-      const closes = result.indicators.quote[0].close.filter(x => x !== null);
-      const timestamps = result.timestamp;
-      const first = closes[0], last = closes[closes.length - 1];
-      const ytd = ((last - first) / first * 100).toFixed(2);
+      const {closes, ts} = await fetchYahoo(b.symbol);
+      const clean = closes.filter(x => x !== null);
+      const first = clean[0], last = clean[clean.length-1];
+      const ytd = ((last-first)/first*100).toFixed(2);
       tbl.innerHTML += `<tr><td>${b.name}</td><td>${b.symbol}</td><td>${last.toFixed(2)}</td><td>${ytd}%</td></tr>`;
       datasets.push({
         label: b.name,
-        data: closes.map((c, i) => ({ x: new Date(timestamps[i]*1000).toLocaleDateString(), y: ((c - first)/first*100) })),
-        borderColor: ['#1f4e79','#c00000','#00b050'][datasets.length],
-        fill: false
+        data: closes.map((c,i)=> c===null?null:((c-first)/first*100)),
+        timestamps: ts,
+        borderColor: b.color, fill:false
       });
     } catch (err) {
       tbl.innerHTML += `<tr><td>${b.name}</td><td colspan="3">Error loading</td></tr>`;
     }
   }
+
+  // Model weighted YTD
+  const m = document.getElementById('modelSelect').value;
+  if (m && models[m]) {
+    let totalW = 0, weightedYtd = 0;
+    for (const row of models[m]) {
+      const sym = row.Symbol;
+      const w = parseFloat(row['Target Percent']) || 0;
+      if (!sym || sym.startsWith('$')) continue;
+      try {
+        const {closes} = await fetchYahoo(sym);
+        const clean = closes.filter(x=>x!==null);
+        if (clean.length<2) continue;
+        const ytd = (clean[clean.length-1]-clean[0])/clean[0]*100;
+        weightedYtd += ytd * w;
+        totalW += w;
+      } catch(e){}
+    }
+    if (totalW>0) {
+      const modelYtd = (weightedYtd/totalW).toFixed(2);
+      tbl.innerHTML += `<tr style="background:#eef6ff;font-weight:bold;"><td>${m} (Model)</td><td>—</td><td>—</td><td>${modelYtd}%</td></tr>`;
+    }
+  }
   renderBenchChart(datasets);
 }
+
 let benchChartObj;
 function renderBenchChart(datasets) {
   if (benchChartObj) benchChartObj.destroy();
-  const labels = datasets[0] ? datasets[0].data.map(d => d.x) : [];
+  const labels = datasets[0] ? datasets[0].timestamps.map(t => new Date(t*1000).toLocaleDateString()) : [];
   benchChartObj = new Chart(document.getElementById('benchChart'), {
     type: 'line',
-    data: {
-      labels,
-      datasets: datasets.map(d => ({
-        label: d.label,
-        data: d.data.map(p => p.y),
-        borderColor: d.borderColor,
-        fill: false,
-        pointRadius: 0
-      }))
-    },
-    options: { scales: { y: { title: { display: true, text: '% Change YTD' } } } }
+    data: { labels, datasets: datasets.map(d=>({
+      label:d.label, data:d.data, borderColor:d.borderColor, fill:false, pointRadius:0
+    }))},
+    options: { scales:{ y:{ title:{display:true,text:'% Change YTD'} } } }
   });
 }
 
-// ===== EXCEL EXPORT =====
+// ============ EXCEL EXPORT ============
 function exportExcel() {
   const m = document.getElementById('modelSelect').value;
   const data = models[m] || [];
@@ -306,122 +315,121 @@ function exportExcel() {
   XLSX.writeFile(wb, `${m}.xlsx`);
 }
 
-// ===== HR / EMPLOYEES =====
+// ============ HR ============
 let employees = [];
 function loadEmployees() {
   const saved = localStorage.getItem('employees');
   if (saved) {
     employees = JSON.parse(saved);
   } else {
-    // placeholder employees
+    // Placeholder employees
     employees = [
-      { name: 'Alex Suarez', hire: '2022-03-15', pto: 20, used: 5, unpaid: 0 },
-      { name: 'Matt Bruce', hire: '2021-07-01', pto: 20, used: 8, unpaid: 1 },
-      { name: 'Jane Placeholder', hire: '2023-09-12', pto: 15, used: 3, unpaid: 0 },
-      { name: 'John Placeholder', hire: '2024-01-08', pto: 15, used: 1, unpaid: 0 }
+      { name:'Alex Suarez', hire:'2021-06-15', ptoUsed:5,  unpaid:0, allot:20 },
+      { name:'Megan Bruce', hire:'2019-03-04', ptoUsed:8,  unpaid:1, allot:20 },
+      { name:'John Placeholder', hire:'2023-01-10', ptoUsed:2, unpaid:0, allot:15 },
+      { name:'Jane Placeholder', hire:'2024-09-22', ptoUsed:0, unpaid:0, allot:15 }
     ];
-    localStorage.setItem('employees', JSON.stringify(employees));
+    saveEmployeesStorage();
   }
   renderEmployees();
 }
-function addEmployee() {
-  const name = document.getElementById('empName').value.trim();
-  const hire = document.getElementById('empHire').value;
-  const pto = parseFloat(document.getElementById('empPTO').value) || 0;
-  const used = parseFloat(document.getElementById('empUsed').value) || 0;
-  const unpaid = parseFloat(document.getElementById('empUnpaid').value) || 0;
-  if (!name || !hire) { alert('Name and hire date required'); return; }
-  employees.push({ name, hire, pto, used, unpaid });
-  localStorage.setItem('employees', JSON.stringify(employees));
-  document.getElementById('empName').value = '';
-  document.getElementById('empHire').value = '';
-  renderEmployees();
-}
-function deleteEmployee(i) {
-  if (confirm('Remove this employee?')) {
-    employees.splice(i, 1);
-    localStorage.setItem('employees', JSON.stringify(employees));
-    renderEmployees();
-  }
-}
+function saveEmployeesStorage(){ localStorage.setItem('employees', JSON.stringify(employees)); }
+
 function renderEmployees() {
   const tbl = document.getElementById('empTable');
-  let html = `<tr><th>Name</th><th>Date of Hire</th><th>Years</th>
-    <th>PTO Allotted</th><th>PTO Used</th><th>PTO Remaining</th>
-    <th>Unpaid Days</th><th>Actions</th></tr>`;
-  employees.forEach((e, i) => {
-    const years = ((new Date() - new Date(e.hire)) / (365.25 * 24 * 3600 * 1000)).toFixed(1);
-    const remaining = e.pto - e.used;
-    const badge = remaining > 5 ? 'green' : 'orange';
+  let html = '<tr><th>Name</th><th>Date of Hire</th><th>PTO Used</th><th>Unpaid TO</th><th>PTO Balance</th><th></th></tr>';
+  employees.forEach((e,i)=>{
+    const bal = (e.allot||0) - (e.ptoUsed||0);
     html += `<tr>
       <td>${e.name}</td>
-      <td>${e.hire}</td>
-      <td>${years}</td>
-      <td>${e.pto}</td>
-      <td>${e.used}</td>
-      <td><span class="badge ${badge}">${remaining}</span></td>
-      <td>${e.unpaid}</td>
-      <td><button class="btn small danger" onclick="deleteEmployee(${i})">Remove</button></td>
+      <td>${e.hire||''}</td>
+      <td>${e.ptoUsed||0}</td>
+      <td>${e.unpaid||0}</td>
+      <td>${bal} / ${e.allot||0}</td>
+      <td><button class="btn danger" onclick="deleteEmp(${i})">×</button></td>
     </tr>`;
   });
   tbl.innerHTML = html;
+
+  const totalPTO = employees.reduce((s,e)=>s+(parseFloat(e.ptoUsed)||0),0);
+  const totalUnpaid = employees.reduce((s,e)=>s+(parseFloat(e.unpaid)||0),0);
+  document.getElementById('hrStats').innerHTML = `
+    <p><b>Total Employees:</b> ${employees.length}</p>
+    <p><b>Total PTO Used (YTD):</b> ${totalPTO} days</p>
+    <p><b>Total Unpaid TO (YTD):</b> ${totalUnpaid} days</p>
+  `;
+}
+function saveEmployee() {
+  const name = document.getElementById('empName').value.trim();
+  if (!name) { alert('Name required'); return; }
+  const existing = employees.findIndex(e=>e.name.toLowerCase()===name.toLowerCase());
+  const rec = {
+    name,
+    hire: document.getElementById('empHire').value,
+    ptoUsed: parseFloat(document.getElementById('empPTO').value)||0,
+    unpaid: parseFloat(document.getElementById('empUnpaid').value)||0,
+    allot: parseFloat(document.getElementById('empAllot').value)||15
+  };
+  if (existing>=0) employees[existing] = rec; else employees.push(rec);
+  saveEmployeesStorage();
+  renderEmployees();
+  ['empName','empHire','empPTO','empUnpaid'].forEach(id=>document.getElementById(id).value='');
+}
+function deleteEmp(i){
+  if (!confirm('Remove '+employees[i].name+'?')) return;
+  employees.splice(i,1); saveEmployeesStorage(); renderEmployees();
 }
 
-// ===== TRADING HOLIDAYS (NYSE 2025) =====
-const HOLIDAYS_2025 = [
-  { date: '2025-01-01', name: "New Year's Day" },
-  { date: '2025-01-20', name: 'Martin Luther King, Jr. Day' },
-  { date: '2025-02-17', name: "Presidents' Day" },
-  { date: '2025-04-18', name: 'Good Friday' },
-  { date: '2025-05-26', name: 'Memorial Day' },
-  { date: '2025-06-19', name: 'Juneteenth' },
-  { date: '2025-07-04', name: 'Independence Day' },
-  { date: '2025-09-01', name: 'Labor Day' },
-  { date: '2025-11-27', name: 'Thanksgiving Day' },
-  { date: '2025-12-25', name: 'Christmas Day' }
-];
-function renderHolidays() {
-  const tbl = document.getElementById('holidayTable');
-  let html = '<tr><th>Date</th><th>Day</th><th>Holiday</th><th>Status</th></tr>';
-  const today = new Date();
-  HOLIDAYS_2025.forEach(h => {
-    const d = new Date(h.date + 'T00:00:00');
-    const day = d.toLocaleDateString('en-US', { weekday: 'long' });
-    const status = d < today ? '<span class="badge green">Past</span>' : '<span class="badge orange">Upcoming</span>';
-    html += `<tr><td>${h.date}</td><td>${day}</td><td>${h.name}</td><td>${status}</td></tr>`;
-  });
-  tbl.innerHTML = html;
-}
+// ============ CALENDAR with Trading Holidays ============
+// NYSE/Nasdaq full closures
+const TRADING_HOLIDAYS = {
+  '2025-01-01':"New Year's Day",
+  '2025-01-09':"Day of Mourning (Carter)",
+  '2025-01-20':"MLK Jr. Day",
+  '2025-02-17':"Presidents' Day",
+  '2025-04-18':"Good Friday",
+  '2025-05-26':"Memorial Day",
+  '2025-06-19':"Juneteenth",
+  '2025-07-04':"Independence Day",
+  '2025-09-01':"Labor Day",
+  '2025-11-27':"Thanksgiving",
+  '2025-12-25':"Christmas Day",
+  '2026-01-01':"New Year's Day",
+  '2026-01-19':"MLK Jr. Day",
+  '2026-02-16':"Presidents' Day",
+  '2026-04-03':"Good Friday",
+  '2026-05-25':"Memorial Day",
+  '2026-06-19':"Juneteenth",
+  '2026-07-03':"Independence Day (Observed)",
+  '2026-09-07':"Labor Day",
+  '2026-11-26':"Thanksgiving",
+  '2026-12-25':"Christmas Day"
+};
 
-// ===== CALENDAR GRID =====
 let calDate = new Date();
-function changeMonth(delta) {
-  calDate.setMonth(calDate.getMonth() + delta);
-  renderCalendar();
-}
+function changeMonth(d){ calDate.setMonth(calDate.getMonth()+d); renderCalendar(); }
+function goToday(){ calDate = new Date(); renderCalendar(); }
+
 function renderCalendar() {
-  const grid = document.getElementById('calendarGrid');
-  const year = calDate.getFullYear();
-  const month = calDate.getMonth();
-  document.getElementById('calLabel').innerText =
-    calDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const y = calDate.getFullYear(), m = calDate.getMonth();
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('calMonthLabel').innerText = `${monthNames[m]} ${y}`;
+  const first = new Date(y,m,1);
+  const last = new Date(y,m+1,0);
+  const today = new Date();
 
-  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   let html = '';
-  days.forEach(d => html += `<div class="cal-day header">${d}</div>`);
-
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  for (let i = 0; i < firstDay; i++) html += '<div class="cal-day"></div>';
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const holiday = HOLIDAYS_2025.find(h => h.date === iso);
-    const cls = holiday ? 'cal-day holiday' : 'cal-day';
-    const ev = holiday ? `<div class="event">${holiday.name}</div>` : '';
-    html += `<div class="${cls}"><div class="date">${d}</div>${ev}</div>`;
+  ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=> html += `<div class="head">${d}</div>`);
+  for (let i=0;i<first.getDay();i++) html += '<div></div>';
+  for (let d=1; d<=last.getDate(); d++) {
+    const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const holiday = TRADING_HOLIDAYS[dateStr];
+    const isToday = (today.getFullYear()===y && today.getMonth()===m && today.getDate()===d);
+    html += `<div class="${holiday?'holiday':''} ${isToday?'today':''}">
+      <b>${d}</b>${holiday?`<br><span style="color:#856404;">${holiday}</span>`:''}
+    </div>`;
   }
-  grid.innerHTML = html;
+  document.getElementById('calendar').innerHTML = html;
 }
 </script>
 </body>
