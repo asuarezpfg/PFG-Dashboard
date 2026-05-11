@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Portfolio Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  body { font-family: -apple-system, Arial, sans-serif; margin: 0; background: #f4f6f8; }
+  .login { max-width: 320px; margin: 100px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.1); }
+  .login input { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; }
+  .login button, .btn { background: #1f4e79; color: white; border: none; padding: 10px 20px; cursor: pointer; border-radius: 4px; }
+  .app { display: none; padding: 20px; }
+  header { background: #1f4e79; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+  .card { background: white; padding: 20px; border-radius: 8px; margin: 15px 0; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
+  th { background: #f0f3f7; }
+  select, input[type=file] { padding: 8px; margin: 5px; }
+  .row { display: flex; gap: 15px; flex-wrap: wrap; }
+  .col { flex: 1; min-width: 300px; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen" class="login">
+  <h2>Team Login</h2>
+  <input type="text" id="username" placeholder="Username">
+  <input type="password" id="password" placeholder="Password">
+  <button onclick="login()">Sign In</button>
+  <p id="loginError" style="color:red;"></p>
+</div>
+
+<!-- APP -->
+<div id="app" class="app">
+  <header>
+    <h2>Portfolio Models Dashboard</h2>
+    <button class="btn" onclick="logout()">Logout</button>
+  </header>
+
+  <div class="card">
+    <h3>Upload Model (CSV)</h3>
+    <input type="file" id="csvFile" accept=".csv" onchange="handleCSV(event)">
+    <p style="font-size:13px;color:#666;">Expected columns: Model, Description, Symbol, Target Percent, Minimum Percent, Maximum Percent</p>
+  </div>
+
+  <div class="card">
+    <h3>Select Model</h3>
+    <select id="modelSelect" onchange="renderModel()"></select>
+    <button class="btn" onclick="exportExcel()">Export to Excel</button>
+    <button class="btn" onclick="loadBenchmarks()">Refresh Benchmarks</button>
+  </div>
+
+  <div class="row">
+    <div class="col card">
+      <h3>Model Holdings</h3>
+      <table id="holdingsTable"></table>
+    </div>
+    <div class="col card">
+      <h3>Allocation</h3>
+      <canvas id="allocChart"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Benchmarks (YTD Performance)</h3>
+    <table id="benchTable">
+      <tr><th>Index</th><th>Symbol</th><th>Latest Price</th><th>YTD %</th></tr>
+    </table>
+    <canvas id="benchChart" style="margin-top:20px;"></canvas>
+  </div>
+</div>
+
+<script>
+// ---- SIMPLE LOGIN (change these) ----
+const USERS = {
+  "user1": "changeme1",
+  "user2": "changeme2"
+};
+
+function login() {
+  const u = document.getElementById('username').value;
+  const p = document.getElementById('password').value;
+  if (USERS[u] && USERS[u] === p) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadStoredModels();
+    loadBenchmarks();
+  } else {
+    document.getElementById('loginError').innerText = "Invalid credentials";
+  }
+}
+function logout() { location.reload(); }
+
+// ---- MODEL STORAGE (localStorage) ----
+let models = {};
+
+function loadStoredModels() {
+  const saved = localStorage.getItem('models');
+  if (saved) models = JSON.parse(saved);
+  refreshModelSelect();
+}
+
+function refreshModelSelect() {
+  const sel = document.getElementById('modelSelect');
+  sel.innerHTML = '';
+  Object.keys(models).forEach(m => {
+    const o = document.createElement('option');
+    o.value = m; o.text = m;
+    sel.add(o);
+  });
+  if (Object.keys(models).length) renderModel();
+}
+
+function handleCSV(e) {
+  const file = e.target.files[0];
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: function(results) {
+      results.data.forEach(row => {
+        const m = row.Model;
+        if (!m) return;
+        if (!models[m]) models[m] = [];
+        models[m].push(row);
+      });
+      localStorage.setItem('models', JSON.stringify(models));
+      refreshModelSelect();
+      alert('Model loaded!');
+    }
+  });
+}
+
+let allocChartObj;
+function renderModel() {
+  const m = document.getElementById('modelSelect').value;
+  const data = models[m] || [];
+  let html = '<tr><th>Symbol</th><th>Target %</th><th>Min %</th><th>Max %</th></tr>';
+  const labels = [], values = [];
+  data.forEach(r => {
+    html += `<tr><td>${r.Symbol}</td><td>${r['Target Percent']}</td><td>${r['Minimum Percent']}</td><td>${r['Maximum Percent']}</td></tr>`;
+    labels.push(r.Symbol);
+    values.push(parseFloat(r['Target Percent']) || 0);
+  });
+  document.getElementById('holdingsTable').innerHTML = html;
+
+  if (allocChartObj) allocChartObj.destroy();
+  allocChartObj = new Chart(document.getElementById('allocChart'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values }] }
+  });
+}
+
+// ---- BENCHMARKS (Yahoo Finance via free proxy) ----
+const BENCHMARKS = [
+  { name: 'S&P 500', symbol: '^GSPC' },
+  { name: 'Dow Jones', symbol: '^DJI' },
+  { name: 'Nasdaq Composite', symbol: '^IXIC' }
+];
+
+async function loadBenchmarks() {
+  const tbl = document.getElementById('benchTable');
+  tbl.innerHTML = '<tr><th>Index</th><th>Symbol</th><th>Latest</th><th>YTD %</th></tr>';
+  const datasets = [];
+  for (const b of BENCHMARKS) {
+    try {
+      // Using a public CORS proxy to reach Yahoo Finance
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${b.symbol}?range=ytd&interval=1d`;
+      const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+      const res = await fetch(proxy);
+      const json = await res.json();
+      const result = json.chart.result[0];
+      const closes = result.indicators.quote[0].close.filter(x => x !== null);
+      const timestamps = result.timestamp;
+      const first = closes[0], last = closes[closes.length - 1];
+      const ytd = ((last - first) / first * 100).toFixed(2);
+      tbl.innerHTML += `<tr><td>${b.name}</td><td>${b.symbol}</td><td>${last.toFixed(2)}</td><td>${ytd}%</td></tr>`;
+      datasets.push({
+        label: b.name,
+        data: closes.map((c, i) => ({ x: new Date(timestamps[i]*1000).toLocaleDateString(), y: ((c - first)/first*100) })),
+        borderColor: ['#1f4e79','#c00000','#00b050'][datasets.length],
+        fill: false
+      });
+    } catch (err) {
+      tbl.innerHTML += `<tr><td>${b.name}</td><td colspan="3">Error loading</td></tr>`;
+    }
+  }
+  renderBenchChart(datasets);
+}
+
+let benchChartObj;
+function renderBenchChart(datasets) {
+  if (benchChartObj) benchChartObj.destroy();
+  const labels = datasets[0] ? datasets[0].data.map(d => d.x) : [];
+  benchChartObj = new Chart(document.getElementById('benchChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: datasets.map(d => ({
+        label: d.label,
+        data: d.data.map(p => p.y),
+        borderColor: d.borderColor,
+        fill: false,
+        pointRadius: 0
+      }))
+    },
+    options: { scales: { y: { title: { display: true, text: '% Change YTD' } } } }
+  });
+}
+
+// ---- EXCEL EXPORT ----
+function exportExcel() {
+  const m = document.getElementById('modelSelect').value;
+  const data = models[m] || [];
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, m.substring(0,30));
+  XLSX.writeFile(wb, `${m}.xlsx`);
+}
+</script>
+</body>
+</html>
