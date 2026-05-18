@@ -2969,8 +2969,150 @@ const ViewSwitcher = ({ actualUser, viewAs, setViewAs }) => {
 };
 
 // Fear & Greed Index fetcher — uses CNN's internal JSON endpoint via proxy
+// ============================================================
+// Yahoo quoteSummary — rich fundamentals per ticker.
+// Returns {priceData, fundamentals, earnings, dividends, revenue}
+// Modules requested: summaryDetail, defaultKeyStatistics, earnings,
+// earningsHistory, earningsTrend, incomeStatementHistoryQuarterly,
+// financialData, calendarEvents
+// ============================================================
+async function fetchYahooQuoteSummary(symbol) {
+  const modules = [
+    "summaryDetail",
+    "defaultKeyStatistics",
+    "earnings",
+    "earningsHistory",
+    "earningsTrend",
+    "incomeStatementHistoryQuarterly",
+    "financialData",
+    "calendarEvents",
+    "price",
+  ].join(",");
+  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${modules}`;
+  const json = await fetchThroughProxies(url, { expectJSON: true, timeoutMs: 10000 });
+  const r = json?.quoteSummary?.result?.[0];
+  if (!r) throw new Error("No quoteSummary data for " + symbol);
+  // Helper to safely unwrap Yahoo's {raw: x, fmt: "..."} objects
+  const u = (obj) => obj && typeof obj === "object" && "raw" in obj ? obj.raw : (obj ?? null);
+  const summary = r.summaryDetail || {};
+  const stats = r.defaultKeyStatistics || {};
+  const fin = r.financialData || {};
+  const price = r.price || {};
+  const earnings = r.earnings || {};
+  const earningsHistory = r.earningsHistory?.history || [];
+  const earningsTrend = r.earningsTrend?.trend || [];
+  const incomeQuarterly = r.incomeStatementHistoryQuarterly?.incomeStatementHistory || [];
+  const cal = r.calendarEvents || {};
+  return {
+    symbol,
+    name: u(price.longName) || u(price.shortName) || symbol,
+    marketCap: u(price.marketCap),
+    last: u(price.regularMarketPrice),
+    pe: u(summary.trailingPE),
+    forwardPE: u(summary.forwardPE),
+    peg: u(stats.pegRatio),
+    eps: u(stats.trailingEps),
+    epsForward: u(stats.forwardEps),
+    dividendRate: u(summary.dividendRate),
+    dividendYield: u(summary.dividendYield),
+    payoutRatio: u(summary.payoutRatio),
+    exDividendDate: u(summary.exDividendDate),
+    fiftyTwoWeekHigh: u(summary.fiftyTwoWeekHigh),
+    fiftyTwoWeekLow: u(summary.fiftyTwoWeekLow),
+    beta: u(summary.beta),
+    profitMargin: u(fin.profitMargins),
+    grossMargin: u(fin.grossMargins),
+    operatingMargin: u(fin.operatingMargins),
+    revenue: u(fin.totalRevenue),
+    revenueGrowth: u(fin.revenueGrowth),
+    earningsGrowth: u(fin.earningsGrowth),
+    debtToEquity: u(fin.debtToEquity),
+    returnOnEquity: u(fin.returnOnEquity),
+    // Earnings history — last 4-8 quarters
+    earningsHistory: earningsHistory.map(e => ({
+      quarter: u(e.quarter) ? new Date(u(e.quarter) * 1000).toISOString().split("T")[0] : null,
+      epsActual: u(e.epsActual),
+      epsEstimate: u(e.epsEstimate),
+      surprisePct: u(e.surprisePercent),
+      period: e.period,
+    })),
+    // Income statement — last 4 quarters (Yahoo provides only 4 free)
+    incomeQuarterly: incomeQuarterly.map(q => ({
+      endDate: u(q.endDate) ? new Date(u(q.endDate) * 1000).toISOString().split("T")[0] : null,
+      revenue: u(q.totalRevenue),
+      netIncome: u(q.netIncome),
+      grossProfit: u(q.grossProfit),
+      operatingIncome: u(q.operatingIncome),
+    })),
+    // Upcoming earnings + ex-div
+    nextEarningsDate: cal.earnings?.earningsDate?.[0] ? new Date(u(cal.earnings.earningsDate[0]) * 1000) : null,
+    nextEarningsEstimate: u(cal.earnings?.earningsAverage),
+    nextDividendDate: u(cal.exDividendDate) ? new Date(u(cal.exDividendDate) * 1000) : null,
+  };
+}
+
+// ============================================================
+// FRED (Federal Reserve Economic Data) — free macro data with CORS support.
+// Without an API key, we use FRED's "fredgraph" CSV endpoint that's open to all.
+// Series IDs: https://fred.stlouisfed.org/categories
+//   DFF      → Federal Funds Effective Rate
+//   DGS10    → 10-Year Treasury Constant Maturity
+//   DGS2     → 2-Year, DGS5 → 5Y, DGS30 → 30Y, DGS1MO → 1M, DGS3MO → 3M, etc.
+//   MORTGAGE30US → 30-Year Fixed Mortgage Rate (US Avg)
+// ============================================================
+async function fetchFRED(seriesId, daysBack = 365) {
+  const start = new Date(); start.setDate(start.getDate() - daysBack);
+  const startStr = start.toISOString().split("T")[0];
+  const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${seriesId}&cosd=${startStr}`;
+  try {
+    const text = await fetchThroughProxies(url, { expectJSON: false });
+    // Parse CSV: header row "observation_date,VALUE"
+    const lines = text.split("\n").filter(Boolean);
+    const data = [];
+    for (let i = 1; i < lines.length; i++) {
+      const [date, val] = lines[i].split(",");
+      const n = parseFloat(val);
+      if (!isNaN(n)) data.push({ date, value: n });
+    }
+    return data;
+  } catch (e) {
+    console.warn("FRED fetch failed for", seriesId, e.message);
+    return [];
+  }
+}
+
+// Fetch the full US Treasury yield curve (one point each maturity, latest values)
+const YIELD_CURVE_SERIES = [
+  { label: "1M",  series: "DGS1MO" },
+  { label: "3M",  series: "DGS3MO" },
+  { label: "6M",  series: "DGS6MO" },
+  { label: "1Y",  series: "DGS1" },
+  { label: "2Y",  series: "DGS2" },
+  { label: "3Y",  series: "DGS3" },
+  { label: "5Y",  series: "DGS5" },
+  { label: "7Y",  series: "DGS7" },
+  { label: "10Y", series: "DGS10" },
+  { label: "20Y", series: "DGS20" },
+  { label: "30Y", series: "DGS30" },
+];
+
+async function fetchYieldCurve() {
+  const out = [];
+  for (const m of YIELD_CURVE_SERIES) {
+    const data = await fetchFRED(m.series, 14);
+    const last = data[data.length - 1];
+    out.push({ ...m, value: last?.value ?? null, date: last?.date ?? null });
+  }
+  return out;
+}
+
 async function fetchFearGreed() {
-  const url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata";
+  // CNN's endpoint expects a date suffix (YYYY-MM-DD). Use yesterday to be safe
+  // (today's data is only available after market hours; weekend → use Friday).
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const dateStr = d.toISOString().split("T")[0];
+  const url = `https://production.dataviz.cnn.io/index/fearandgreed/graphdata/${dateStr}`;
   try {
     const data = await fetchThroughProxies(url, { expectJSON: true });
     const fg = data.fear_and_greed;
@@ -3017,6 +3159,179 @@ const TRADING_HOLIDAYS = {
 // ============================================================
 // INVESTMENT DASHBOARD MODULE
 // ============================================================
+// Benchmark options for model comparison
+const BENCHMARK_OPTIONS = [
+  { sym: "^GSPC",  name: "S&P 500" },
+  { sym: "^DJI",   name: "Dow Jones Industrial" },
+  { sym: "^IXIC",  name: "Nasdaq Composite" },
+  { sym: "^RUT",   name: "Russell 2000 (Small Cap)" },
+  { sym: "^RUI",   name: "Russell 1000 (Large Cap)" },
+  { sym: "AGG",    name: "iShares Aggregate Bond" },
+  { sym: "ACWI",   name: "MSCI All Country World" },
+  { sym: "EFA",    name: "iShares MSCI EAFE (Intl Dev)" },
+  { sym: "EEM",    name: "iShares MSCI Emerging Mkts" },
+  { sym: "VTI",    name: "Vanguard Total US Stock" },
+  { sym: "BND",    name: "Vanguard Total Bond Mkt" },
+];
+
+// ============================================================
+// MODEL BENCHMARK COMPARISON — model weighted avg returns vs index
+// ============================================================
+function ModelBenchmarkCard({ holdings, benchmark, onChangeBenchmark }) {
+  const [modelStats, setModelStats] = useState(null);
+  const [benchStats, setBenchStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const chartRef = useRef(null);
+  const chartObj = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        // For the model: weighted-average YTD and 1Y across all holdings
+        let totalWeight = 0, ytdWeighted = 0, oneYearWeighted = 0;
+        let modelPath = null; // cumulative weighted return path
+        let modelTs = null;
+        for (const h of holdings) {
+          const sym = h.Symbol;
+          const target = parseFloat(h["Target Percent"]) || 0;
+          if (!sym || sym.startsWith("$") || sym === "CASH" || target <= 0) continue;
+          try {
+            const [ytdData, oneYearData] = await Promise.all([
+              fetchYahoo(sym, "ytd", "1d"),
+              fetchYahoo(sym, "1y", "1d").catch(() => null),
+            ]);
+            const clean = ytdData.closes.filter(c => c !== null);
+            if (clean.length < 2) continue;
+            const ytdPct = ((clean[clean.length - 1] - clean[0]) / clean[0]) * 100;
+            ytdWeighted += ytdPct * target;
+            if (oneYearData) {
+              const yc = oneYearData.closes.filter(c => c !== null);
+              if (yc.length >= 2) oneYearWeighted += ((yc[yc.length - 1] - yc[0]) / yc[0]) * 100 * target;
+            }
+            totalWeight += target;
+            // Build path on first valid ticker (use as backbone). Weight others into it.
+            if (!modelPath) {
+              const start = clean[0];
+              modelPath = clean.map(c => ((c - start) / start) * 100 * (target / 100));
+              modelTs = ytdData.ts.filter((_, i) => ytdData.closes[i] !== null);
+            } else if (modelPath.length === clean.length) {
+              const start = clean[0];
+              for (let i = 0; i < clean.length; i++) {
+                modelPath[i] += ((clean[i] - start) / start) * 100 * (target / 100);
+              }
+            }
+          } catch (e) { /* skip */ }
+        }
+        if (totalWeight > 0) {
+          if (!cancelled) setModelStats({ ytd: ytdWeighted / totalWeight * 100 / 100, oneYear: oneYearWeighted / totalWeight * 100 / 100, path: modelPath, ts: modelTs });
+        }
+        // For the benchmark
+        try {
+          const [bYtd, bOneYear] = await Promise.all([
+            fetchYahoo(benchmark, "ytd", "1d"),
+            fetchYahoo(benchmark, "1y", "1d").catch(() => null),
+          ]);
+          const cb = bYtd.closes.filter(c => c !== null);
+          if (cb.length >= 2) {
+            const ytdB = ((cb[cb.length - 1] - cb[0]) / cb[0]) * 100;
+            let oneYearB = null;
+            if (bOneYear) {
+              const yc = bOneYear.closes.filter(c => c !== null);
+              if (yc.length >= 2) oneYearB = ((yc[yc.length - 1] - yc[0]) / yc[0]) * 100;
+            }
+            const benchStart = cb[0];
+            const benchPath = cb.map(c => ((c - benchStart) / benchStart) * 100);
+            const benchTs = bYtd.ts.filter((_, i) => bYtd.closes[i] !== null);
+            if (!cancelled) setBenchStats({ ytd: ytdB, oneYear: oneYearB, path: benchPath, ts: benchTs });
+          }
+        } catch (e) { /* skip */ }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [holdings, benchmark]);
+
+  // Comparison chart
+  useEffect(() => {
+    if (!chartRef.current || !modelStats?.path || !benchStats?.path) return;
+    if (chartObj.current) { chartObj.current.destroy(); chartObj.current = null; }
+    const labels = (benchStats.ts || []).map(t => new Date(t * 1000).toLocaleDateString());
+    const benchmarkName = BENCHMARK_OPTIONS.find(b => b.sym === benchmark)?.name || benchmark;
+    chartObj.current = new Chart(chartRef.current, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          { label: "Model (weighted)", data: modelStats.path, borderColor: COLORS.primary, backgroundColor: "transparent", pointRadius: 0, borderWidth: 2.5, tension: 0.2 },
+          { label: benchmarkName, data: benchStats.path, borderColor: COLORS.gold, backgroundColor: "transparent", pointRadius: 0, borderWidth: 2.5, borderDash: [4, 3], tension: 0.2 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: { y: { ticks: { callback: (v) => v.toFixed(1) + "%" } } },
+        plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toFixed(2)}%` } } },
+      },
+    });
+    return () => { if (chartObj.current) chartObj.current.destroy(); };
+  }, [modelStats, benchStats, benchmark]);
+
+  const modelYtd = modelStats?.ytd;
+  const benchYtd = benchStats?.ytd;
+  const modelYear = modelStats?.oneYear;
+  const benchYear = benchStats?.oneYear;
+
+  return (
+    <Card style={{ padding: 18, marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>Model vs Benchmark</div>
+          <div style={{ fontSize: 11, color: COLORS.textMuted }}>Weighted by target % · YTD and rolling 12-month</div>
+        </div>
+        <select value={benchmark} onChange={e => onChangeBenchmark(e.target.value)}
+          style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", background: COLORS.surface }}>
+          {BENCHMARK_OPTIONS.map(b => <option key={b.sym} value={b.sym}>{b.name}</option>)}
+        </select>
+      </div>
+
+      {loading ? (
+        <div style={{ padding: 32, textAlign: "center", color: COLORS.textMuted, fontSize: 13 }}>Loading model and benchmark data…</div>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 14 }}>
+            <div style={{ padding: 12, background: COLORS.primary + "11", borderRadius: 8, borderLeft: `3px solid ${COLORS.primary}` }}>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Model · YTD</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: modelYtd >= 0 ? COLORS.success : COLORS.danger, marginTop: 2 }}>{modelYtd != null ? (modelYtd >= 0 ? "+" : "") + modelYtd.toFixed(2) + "%" : "—"}</div>
+            </div>
+            <div style={{ padding: 12, background: COLORS.gold + "22", borderRadius: 8, borderLeft: `3px solid ${COLORS.gold}` }}>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Benchmark · YTD</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: benchYtd >= 0 ? COLORS.success : COLORS.danger, marginTop: 2 }}>{benchYtd != null ? (benchYtd >= 0 ? "+" : "") + benchYtd.toFixed(2) + "%" : "—"}</div>
+            </div>
+            <div style={{ padding: 12, background: COLORS.primary + "11", borderRadius: 8, borderLeft: `3px solid ${COLORS.primary}` }}>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Model · 1Y</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: modelYear >= 0 ? COLORS.success : COLORS.danger, marginTop: 2 }}>{modelYear != null ? (modelYear >= 0 ? "+" : "") + modelYear.toFixed(2) + "%" : "—"}</div>
+            </div>
+            <div style={{ padding: 12, background: COLORS.gold + "22", borderRadius: 8, borderLeft: `3px solid ${COLORS.gold}` }}>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Benchmark · 1Y</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: benchYear >= 0 ? COLORS.success : COLORS.danger, marginTop: 2 }}>{benchYear != null ? (benchYear >= 0 ? "+" : "") + benchYear.toFixed(2) + "%" : "—"}</div>
+            </div>
+          </div>
+
+          {modelStats?.path && benchStats?.path && (
+            <div style={{ height: 260 }}><canvas ref={chartRef} /></div>
+          )}
+
+          <div style={{ marginTop: 10, fontSize: 11, color: COLORS.textDim, lineHeight: 1.5 }}>
+            Model performance shown is calculated as the weighted average return of each holding by target %. Cash sleeves and zero-weight positions are excluded.
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
 function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, people, onExit }) {
   const [page, setPage] = useState("overview");
   const [models, setModels] = useState({});
@@ -3025,6 +3340,28 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
   const [optionsPositions, setOptionsPositions] = useState([]);
   const [stockUniverse, setStockUniverse] = useState(DEFAULT_STOCK_UNIVERSE);
   const [modelRatings, setModelRatings] = useState({});   // { modelName: { symbol: 1-5 } }
+  const [modelBenchmark, setModelBenchmark] = useState("^GSPC"); // default to S&P 500
+  const [stockDetailSymbol, setStockDetailSymbol] = useState(null); // clicking a model holding opens this
+  const [outlookData, setOutlookData] = useState({
+    quarter: "Q2",
+    year: "2026",
+    thesis: "Markets entered the second quarter of 2026 against a backdrop of moderating inflation, a Fed that has paused but not yet pivoted, and resilient corporate earnings. Our base case remains constructive on US equities with a tilt toward quality and large-cap growth, while we maintain a neutral duration stance in fixed income. Volatility around the yield curve and geopolitical risk suggests measured risk-taking and disciplined rebalancing.",
+    equities: "We remain overweight US large-cap quality. Earnings have proven more resilient than feared and AI-driven productivity gains continue to support margins for the largest tech franchises. We are cautious on small-caps until refinancing pressures ease.",
+    fixedIncome: "Intermediate duration looks attractive at current yields. We're neutral on credit spreads — investment-grade compensates fairly for risk, but high-yield offers limited cushion. Treasury Inflation-Protected Securities (TIPS) remain a sensible inflation hedge for taxable accounts.",
+    alternatives: "We're modestly increasing exposure to real assets. Gold continues to provide portfolio diversification benefits in periods of dollar weakness. Energy exposure is being managed tactically given OPEC+ supply discipline.",
+    risks: "Key risks we're watching: 1) Inflation re-acceleration that delays Fed cuts; 2) Geopolitical escalation in the Middle East or Asia; 3) Election-year fiscal policy uncertainty; 4) Credit cycle tightening in middle-market debt.",
+    closingNote: "We meet quarterly with each client to review allocation, risk tolerance, and goals. Please reach out to schedule your review.",
+  });
+
+  // Load outlook from storage
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await window.storage.get("pfg-outlook-v1");
+        if (r?.value) setOutlookData(JSON.parse(r.value));
+      } catch (e) {}
+    })();
+  }, []);
   const [benchData, setBenchData] = useState({ rows: [], datasets: [] });
   const [range, setRange] = useState("ytd");
   const [chartFilters, setChartFilters] = useState({ showSP: true, showDJ: true, showNQ: true, showModel: true });
@@ -3345,6 +3682,9 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
     { key: "overview", icon: IconHome, label: "Overview" },
     { key: "stocks", icon: IconTrend, label: "Stocks" },
     { key: "models", icon: IconList, label: "Models" },
+    { key: "macro", icon: IconDollar, label: "Macro" },
+    { key: "outlook", icon: IconClipboard, label: "Quarterly Outlook" },
+    { key: "risk", icon: IconClipboard, label: "Risk Profiler" },
   ];
 
   return (
@@ -3493,11 +3833,13 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 6 }}>
                 {sectorData.map(s => (
-                  <div key={s.sym} style={{ padding: "12px 10px", borderRadius: 8, background: heatColor(s.pct), color: "white", textAlign: "center" }}>
+                  <button key={s.sym} onClick={() => setStockDetailSymbol(s.sym)}
+                          style={{ padding: "12px 10px", borderRadius: 8, background: heatColor(s.pct), color: "white", textAlign: "center", border: "none", cursor: "pointer", fontFamily: "inherit" }}
+                          title={`Click for ${s.name} (${s.sym}) details`}>
                     <div style={{ fontSize: 10, opacity: 0.85, fontWeight: 600, marginBottom: 4 }}>{s.name}</div>
                     <div style={{ fontSize: 15, fontWeight: 700 }}>{s.pct != null ? (s.pct >= 0 ? "+" : "") + s.pct.toFixed(2) + "%" : "—"}</div>
                     <div style={{ fontSize: 10, opacity: 0.8, marginTop: 2 }}>{s.sym}</div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </Card>
@@ -3511,7 +3853,9 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
                     <tbody>
                       {moversData.gainers.map((m, i) => (
                         <tr key={m.sym} style={{ borderTop: i === 0 ? "none" : `1px solid ${COLORS.borderLight}` }}>
-                          <td style={{ padding: "6px 0", fontWeight: 600 }}>{m.sym}</td>
+                          <td style={{ padding: "6px 0", fontWeight: 600 }}>
+                            <button onClick={() => setStockDetailSymbol(m.sym)} style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontWeight: 600, fontSize: 13, color: COLORS.primary, cursor: "pointer", textDecoration: "underline" }}>{m.sym}</button>
+                          </td>
                           <td style={{ padding: "6px 0", color: COLORS.textMuted }}>{m.name}</td>
                           <td style={{ padding: "6px 0", textAlign: "right" }}>${m.last.toFixed(2)}</td>
                           <td style={{ padding: "6px 0", textAlign: "right", color: COLORS.success, fontWeight: 600 }}>+{m.pct.toFixed(2)}%</td>
@@ -3528,7 +3872,9 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
                     <tbody>
                       {moversData.losers.map((m, i) => (
                         <tr key={m.sym} style={{ borderTop: i === 0 ? "none" : `1px solid ${COLORS.borderLight}` }}>
-                          <td style={{ padding: "6px 0", fontWeight: 600 }}>{m.sym}</td>
+                          <td style={{ padding: "6px 0", fontWeight: 600 }}>
+                            <button onClick={() => setStockDetailSymbol(m.sym)} style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontWeight: 600, fontSize: 13, color: COLORS.primary, cursor: "pointer", textDecoration: "underline" }}>{m.sym}</button>
+                          </td>
                           <td style={{ padding: "6px 0", color: COLORS.textMuted }}>{m.name}</td>
                           <td style={{ padding: "6px 0", textAlign: "right" }}>${m.last.toFixed(2)}</td>
                           <td style={{ padding: "6px 0", textAlign: "right", color: COLORS.danger, fontWeight: 600 }}>{m.pct.toFixed(2)}%</td>
@@ -3672,10 +4018,18 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
             </Card>
 
             {selectedModel && models[selectedModel] && (
+              <ModelBenchmarkCard
+                holdings={models[selectedModel]}
+                benchmark={modelBenchmark}
+                onChangeBenchmark={setModelBenchmark}
+              />
+            )}
+
+            {selectedModel && models[selectedModel] && (
               <Card style={{ padding: 20, marginBottom: 16 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Holdings</div>
                 <div style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 14 }}>
-                  Per-position view with live YTD performance and Morningstar rating. Click any chart to enlarge.
+                  Click any ticker for full fundamentals. Click sparkline to expand YTD price chart.
                 </div>
                 <div>
                   {models[selectedModel].map((r, i) => (
@@ -3690,6 +4044,7 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
                         const next = { ...modelRatings, [selectedModel]: { ...(modelRatings[selectedModel] || {}), [r.Symbol]: rating } };
                         save({ modelRatings: next });
                       }}
+                      onOpenDetail={(sym) => setStockDetailSymbol(sym)}
                     />
                   ))}
                 </div>
@@ -3714,7 +4069,14 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
           />
         )}
 
+        {page === "macro" && <MacroDashboard />}
+        {page === "outlook" && <QuarterlyOutlook canEdit={canEditOwnerStuff} outlookData={outlookData} saveOutlook={(next) => { setOutlookData(next); try { window.storage.set("pfg-outlook-v1", JSON.stringify(next)); } catch (e) {} }} />}
+        {page === "risk" && <RiskProfiler />}
+
       </div>
+
+      {/* Stock detail modal — shared across pages */}
+      <StockDetailModal symbol={stockDetailSymbol} open={!!stockDetailSymbol} onClose={() => setStockDetailSymbol(null)} />
     </div>
   );
 }
@@ -3788,8 +4150,8 @@ function FearGreedCard({ data }) {
 // ============================================================
 // MODEL HOLDING ROW — per-position view with YTD, mini chart, Morningstar
 // ============================================================
-function ModelHoldingRow({ symbol, targetPct, modelName, morningstarRating, canEdit, onRatingChange }) {
-  const [data, setData] = useState(null);   // { ytd, last, closes (~YTD daily), ts }
+function ModelHoldingRow({ symbol, targetPct, modelName, morningstarRating, canEdit, onRatingChange, onOpenDetail }) {
+  const [data, setData] = useState(null);   // { ytd, last, closes (~YTD daily), ts, oneYear }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -3808,11 +4170,22 @@ function ModelHoldingRow({ symbol, targetPct, modelName, morningstarRating, canE
       setLoading(true);
       setError(false);
       try {
-        const { closes, ts } = await fetchYahoo(symbol, "ytd", "1d");
-        const clean = closes.filter(c => c !== null);
+        // Fetch YTD for the sparkline, AND 1Y for the rolling return
+        const [ytdData, oneYearData] = await Promise.all([
+          fetchYahoo(symbol, "ytd", "1d"),
+          fetchYahoo(symbol, "1y", "1d").catch(() => null),
+        ]);
+        const clean = ytdData.closes.filter(c => c !== null);
         if (clean.length < 2) throw new Error("not enough data");
         const ytd = ((clean[clean.length - 1] - clean[0]) / clean[0]) * 100;
-        if (!cancelled) setData({ ytd, last: clean[clean.length - 1], closes, ts });
+        let oneYear = null;
+        if (oneYearData) {
+          const yearClean = oneYearData.closes.filter(c => c !== null);
+          if (yearClean.length >= 2) {
+            oneYear = ((yearClean[yearClean.length - 1] - yearClean[0]) / yearClean[0]) * 100;
+          }
+        }
+        if (!cancelled) setData({ ytd, oneYear, last: clean[clean.length - 1], closes: ytdData.closes, ts: ytdData.ts });
       } catch (e) {
         if (!cancelled) setError(true);
       } finally {
@@ -3882,37 +4255,54 @@ function ModelHoldingRow({ symbol, targetPct, modelName, morningstarRating, canE
 
   return (
     <div style={{ borderBottom: `1px solid ${COLORS.borderLight}` }}>
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(80px, 110px) minmax(70px, 90px) minmax(100px, 1fr) minmax(110px, 140px) minmax(100px, 140px) 30px", gap: 12, alignItems: "center", padding: "12px 4px" }}>
-        {/* Symbol */}
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(80px, 110px) minmax(60px, 80px) minmax(70px, 90px) minmax(70px, 90px) minmax(80px, 1fr) minmax(100px, 130px) 30px", gap: 10, alignItems: "center", padding: "12px 4px" }}>
+        {/* Symbol — clickable */}
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.text }}>{symbol || "—"}</div>
-          {isCash && <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 2 }}>Cash sleeve</div>}
+          {isCash ? (
+            <>
+              <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.text }}>{symbol || "—"}</div>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 2 }}>Cash sleeve</div>
+            </>
+          ) : (
+            <button onClick={() => onOpenDetail && onOpenDetail(symbol)}
+              style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontWeight: 700, fontSize: 14, color: COLORS.primary, cursor: "pointer", textDecoration: "underline", textAlign: "left" }}>
+              {symbol}
+            </button>
+          )}
         </div>
         {/* Target % */}
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>Target</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.primaryDark }}>{targetPct != null ? targetPct + "%" : "—"}</div>
+          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Target</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.primaryDark }}>{targetPct != null ? targetPct + "%" : "—"}</div>
         </div>
         {/* YTD */}
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>YTD</div>
-          {isCash ? <div style={{ fontSize: 13, color: COLORS.textMuted }}>—</div> :
-           loading ? <div style={{ fontSize: 12, color: COLORS.textMuted }}>Loading…</div> :
-           error ? <div style={{ fontSize: 12, color: COLORS.textMuted }}>—</div> :
-           <div style={{ fontSize: 14, fontWeight: 700, color: data.ytd >= 0 ? COLORS.success : COLORS.danger }}>
+          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>YTD</div>
+          {isCash ? <div style={{ fontSize: 12, color: COLORS.textMuted }}>—</div> :
+           loading ? <div style={{ fontSize: 11, color: COLORS.textMuted }}>…</div> :
+           error ? <div style={{ fontSize: 11, color: COLORS.textMuted }}>—</div> :
+           <div style={{ fontSize: 13, fontWeight: 700, color: data.ytd >= 0 ? COLORS.success : COLORS.danger }}>
              {data.ytd >= 0 ? "+" : ""}{data.ytd.toFixed(2)}%
            </div>}
         </div>
+        {/* Rolling 12M */}
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>1Y</div>
+          {isCash || !data || data.oneYear == null ? <div style={{ fontSize: 12, color: COLORS.textMuted }}>—</div> :
+           <div style={{ fontSize: 13, fontWeight: 700, color: data.oneYear >= 0 ? COLORS.success : COLORS.danger }}>
+             {data.oneYear >= 0 ? "+" : ""}{data.oneYear.toFixed(2)}%
+           </div>}
+        </div>
         {/* Sparkline */}
-        <div onClick={() => !isCash && data && setExpanded(!expanded)} style={{ cursor: !isCash && data ? "pointer" : "default", height: 36 }} title={!isCash && data ? "Click to expand chart" : ""}>
-          {isCash ? <div style={{ fontSize: 11, color: COLORS.textDim, textAlign: "center", lineHeight: "36px" }}>—</div> :
-           loading ? <div style={{ fontSize: 11, color: COLORS.textDim, textAlign: "center", lineHeight: "36px" }}>…</div> :
-           error ? <div style={{ fontSize: 11, color: COLORS.textDim, textAlign: "center", lineHeight: "36px" }}>data unavailable</div> :
+        <div onClick={() => !isCash && data && setExpanded(!expanded)} style={{ cursor: !isCash && data ? "pointer" : "default", height: 32 }} title={!isCash && data ? "Click to expand chart" : ""}>
+          {isCash ? <div style={{ fontSize: 11, color: COLORS.textDim, textAlign: "center", lineHeight: "32px" }}>—</div> :
+           loading ? <div style={{ fontSize: 11, color: COLORS.textDim, textAlign: "center", lineHeight: "32px" }}>…</div> :
+           error ? <div style={{ fontSize: 11, color: COLORS.textDim, textAlign: "center", lineHeight: "32px" }}>—</div> :
            <canvas ref={sparkRef} />}
         </div>
         {/* Morningstar */}
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>Morningstar</div>
+          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Morningstar</div>
           {canEdit ? (
             <select value={ratingValue} onChange={e => onRatingChange(e.target.value === "" ? null : parseInt(e.target.value))}
               style={{ padding: "3px 6px", borderRadius: 4, border: `1px solid ${COLORS.border}`, fontSize: 12, fontFamily: "inherit", background: COLORS.surface }}>
@@ -4027,10 +4417,254 @@ function EconCalendarEditor({ calendar, setCalendar, onBack }) {
 // STOCK DASHBOARD (replaces the old options-positions tracker)
 // — view-only for non-owners; owners can add/remove the universe
 // ============================================================
+// ============================================================
+// STOCK DETAIL MODAL — full fundamentals, earnings, revenue per ticker.
+// Opens when clicking any ticker symbol anywhere in the dashboard.
+// ============================================================
+function StockDetailModal({ symbol, open, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [priceData, setPriceData] = useState(null);   // YTD price for chart
+  const priceCanvasRef = useRef(null);
+  const priceChartRef = useRef(null);
+  const revenueCanvasRef = useRef(null);
+  const revenueChartRef = useRef(null);
+  const earningsCanvasRef = useRef(null);
+  const earningsChartRef = useRef(null);
+
+  useEffect(() => {
+    if (!open || !symbol) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true); setError(null); setData(null); setPriceData(null);
+      try {
+        const [summary, priceHist] = await Promise.all([
+          fetchYahooQuoteSummary(symbol),
+          fetchYahoo(symbol, "ytd", "1d").catch(() => null),
+        ]);
+        if (cancelled) return;
+        setData(summary);
+        setPriceData(priceHist);
+      } catch (e) {
+        if (!cancelled) setError(e.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, symbol]);
+
+  // Price chart
+  useEffect(() => {
+    if (!open || !priceData || !priceCanvasRef.current) return;
+    if (priceChartRef.current) { priceChartRef.current.destroy(); priceChartRef.current = null; }
+    const cleanCloses = priceData.closes.filter(c => c !== null);
+    const cleanTs = (priceData.ts || []).filter((_, i) => priceData.closes[i] !== null);
+    const start = cleanCloses[0];
+    const last = cleanCloses[cleanCloses.length - 1];
+    const up = last >= start;
+    priceChartRef.current = new Chart(priceCanvasRef.current, {
+      type: "line",
+      data: {
+        labels: cleanTs.map(t => new Date(t * 1000).toLocaleDateString()),
+        datasets: [{
+          data: cleanCloses,
+          borderColor: up ? COLORS.success : COLORS.danger,
+          backgroundColor: (up ? COLORS.success : COLORS.danger) + "15",
+          fill: true, pointRadius: 0, borderWidth: 2, tension: 0.2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: { y: { title: { display: true, text: "Price ($)" } } },
+        plugins: { legend: { display: false } },
+      },
+    });
+    return () => { if (priceChartRef.current) priceChartRef.current.destroy(); };
+  }, [open, priceData]);
+
+  // Revenue chart (last 4 quarters available from Yahoo free)
+  useEffect(() => {
+    if (!open || !data?.incomeQuarterly?.length || !revenueCanvasRef.current) return;
+    if (revenueChartRef.current) { revenueChartRef.current.destroy(); revenueChartRef.current = null; }
+    const reversed = [...data.incomeQuarterly].reverse(); // chronological
+    revenueChartRef.current = new Chart(revenueCanvasRef.current, {
+      type: "bar",
+      data: {
+        labels: reversed.map(q => q.endDate || "—"),
+        datasets: [{
+          label: "Revenue", data: reversed.map(q => q.revenue),
+          backgroundColor: COLORS.primary, borderRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => "$" + (ctx.raw / 1e9).toFixed(2) + "B" } } },
+        scales: { y: { ticks: { callback: (v) => "$" + (v / 1e9).toFixed(1) + "B" } } },
+      },
+    });
+    return () => { if (revenueChartRef.current) revenueChartRef.current.destroy(); };
+  }, [open, data]);
+
+  // Earnings (EPS) chart
+  useEffect(() => {
+    if (!open || !data?.earningsHistory?.length || !earningsCanvasRef.current) return;
+    if (earningsChartRef.current) { earningsChartRef.current.destroy(); earningsChartRef.current = null; }
+    const reversed = [...data.earningsHistory].reverse();
+    earningsChartRef.current = new Chart(earningsCanvasRef.current, {
+      type: "bar",
+      data: {
+        labels: reversed.map(e => e.period || e.quarter || "—"),
+        datasets: [
+          { label: "EPS Actual", data: reversed.map(e => e.epsActual), backgroundColor: COLORS.primary, borderRadius: 4 },
+          { label: "EPS Estimate", data: reversed.map(e => e.epsEstimate), backgroundColor: COLORS.gold, borderRadius: 4 },
+        ],
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } },
+    });
+    return () => { if (earningsChartRef.current) earningsChartRef.current.destroy(); };
+  }, [open, data]);
+
+  if (!open) return null;
+
+  const fmtBig = (n) => n == null ? "—" : n >= 1e12 ? "$" + (n / 1e12).toFixed(2) + "T" : n >= 1e9 ? "$" + (n / 1e9).toFixed(2) + "B" : n >= 1e6 ? "$" + (n / 1e6).toFixed(2) + "M" : "$" + n.toFixed(0);
+  const fmtPct = (n) => n == null ? "—" : (n * 100).toFixed(2) + "%";
+  const fmtNum = (n, digits = 2) => n == null ? "—" : Number(n).toFixed(digits);
+  const fmtDate = (d) => !d ? "—" : (d instanceof Date ? d.toLocaleDateString() : d);
+
+  return (
+    <Modal open={open} onClose={onClose} title={`${symbol} — Stock Detail`} wide={true}>
+      {loading && <div style={{ padding: 40, textAlign: "center", color: COLORS.textMuted }}>Loading…</div>}
+      {error && <div style={{ padding: 24, background: COLORS.danger + "15", borderRadius: 8, color: COLORS.danger }}>Failed to load: {error}</div>}
+      {data && (
+        <div>
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: COLORS.text }}>{data.symbol}</div>
+              <div style={{ fontSize: 13, color: COLORS.textMuted }}>{data.name}</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: COLORS.primary, marginTop: 6 }}>${fmtNum(data.last)}</div>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <a href={`https://finance.yahoo.com/quote/${data.symbol}`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Yahoo Finance ↗</a>
+              <a href={`https://www.morningstar.com/stocks/xnas/${data.symbol.toLowerCase()}/quote`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Morningstar ↗</a>
+              <a href={`https://www.google.com/finance/quote/${data.symbol}:NASDAQ`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Google Finance ↗</a>
+            </div>
+          </div>
+
+          {/* Price chart */}
+          <Card style={{ padding: 14, marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>YTD Price</div>
+            <div style={{ height: 200 }}><canvas ref={priceCanvasRef} /></div>
+          </Card>
+
+          {/* Fundamentals grid */}
+          <Card style={{ padding: 14, marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>Key Metrics</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+              {[
+                ["Market Cap", fmtBig(data.marketCap)],
+                ["P/E (TTM)", fmtNum(data.pe)],
+                ["Forward P/E", fmtNum(data.forwardPE)],
+                ["PEG Ratio", fmtNum(data.peg)],
+                ["EPS (TTM)", "$" + fmtNum(data.eps)],
+                ["EPS (Fwd)", "$" + fmtNum(data.epsForward)],
+                ["Dividend Yield", fmtPct(data.dividendYield)],
+                ["Dividend Rate", "$" + fmtNum(data.dividendRate)],
+                ["Payout Ratio", fmtPct(data.payoutRatio)],
+                ["Profit Margin", fmtPct(data.profitMargin)],
+                ["Beta", fmtNum(data.beta)],
+                ["52W High", "$" + fmtNum(data.fiftyTwoWeekHigh)],
+                ["52W Low", "$" + fmtNum(data.fiftyTwoWeekLow)],
+                ["Revenue (TTM)", fmtBig(data.revenue)],
+                ["Revenue Growth (YoY)", fmtPct(data.revenueGrowth)],
+                ["Return on Equity", fmtPct(data.returnOnEquity)],
+              ].map(([label, val], i) => (
+                <div key={i}>
+                  <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text, marginTop: 2 }}>{val}</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {/* Earnings + Revenue charts */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 12, marginBottom: 16 }}>
+            {data.earningsHistory.length > 0 && (
+              <Card style={{ padding: 14 }}>
+                <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>EPS — Last Quarters (Actual vs Estimate)</div>
+                <div style={{ height: 180 }}><canvas ref={earningsCanvasRef} /></div>
+              </Card>
+            )}
+            {data.incomeQuarterly.length > 0 && (
+              <Card style={{ padding: 14 }}>
+                <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>Revenue — Last Quarters</div>
+                <div style={{ height: 180 }}><canvas ref={revenueCanvasRef} /></div>
+              </Card>
+            )}
+          </div>
+
+          {/* Earnings history table */}
+          {data.earningsHistory.length > 0 && (
+            <Card style={{ padding: 14, marginBottom: 16 }}>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>Earnings History</div>
+              <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                <thead><tr style={{ background: COLORS.bg, textAlign: "left" }}>
+                  <th style={{ padding: "6px 10px" }}>Period</th>
+                  <th style={{ padding: "6px 10px" }}>Quarter</th>
+                  <th style={{ padding: "6px 10px", textAlign: "right" }}>EPS Actual</th>
+                  <th style={{ padding: "6px 10px", textAlign: "right" }}>EPS Estimate</th>
+                  <th style={{ padding: "6px 10px", textAlign: "right" }}>Surprise %</th>
+                </tr></thead>
+                <tbody>
+                  {data.earningsHistory.map((e, i) => (
+                    <tr key={i} style={{ borderTop: `1px solid ${COLORS.borderLight}` }}>
+                      <td style={{ padding: "6px 10px" }}>{e.period}</td>
+                      <td style={{ padding: "6px 10px", color: COLORS.textMuted }}>{e.quarter || "—"}</td>
+                      <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 600 }}>${fmtNum(e.epsActual)}</td>
+                      <td style={{ padding: "6px 10px", textAlign: "right", color: COLORS.textMuted }}>${fmtNum(e.epsEstimate)}</td>
+                      <td style={{ padding: "6px 10px", textAlign: "right", color: (e.surprisePct ?? 0) >= 0 ? COLORS.success : COLORS.danger, fontWeight: 600 }}>
+                        {e.surprisePct != null ? (e.surprisePct >= 0 ? "+" : "") + fmtNum(e.surprisePct) + "%" : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
+
+          {/* Upcoming events */}
+          <Card style={{ padding: 14 }}>
+            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>Upcoming Events</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 11, color: COLORS.textMuted }}>Next Earnings</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text }}>{fmtDate(data.nextEarningsDate)}</div>
+                {data.nextEarningsEstimate != null && (
+                  <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>Est. EPS: ${fmtNum(data.nextEarningsEstimate)}</div>
+                )}
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: COLORS.textMuted }}>Ex-Dividend Date</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text }}>{fmtDate(data.nextDividendDate || data.exDividendDate)}</div>
+                {data.dividendRate != null && (
+                  <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>Rate: ${fmtNum(data.dividendRate)}/yr · Yield: {fmtPct(data.dividendYield)}</div>
+                )}
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 function StockDashboard({ universe, setUniverse, canEdit }) {
   const [quotes, setQuotes] = useState({});            // { sym: { last, prev, pct, vol, dayHigh, dayLow, yearHigh, yearLow } }
   const [loading, setLoading] = useState(false);
   const [addForm, setAddForm] = useState({ sym: "", name: "" });
+  const [detailSymbol, setDetailSymbol] = useState(null);   // clicking a row opens this
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -4110,7 +4744,11 @@ function StockDashboard({ universe, setUniverse, canEdit }) {
               }
               return (
                 <tr key={stk.sym} style={{ borderTop: `1px solid ${COLORS.borderLight}` }}>
-                  <td style={{ padding: "10px 12px", fontWeight: 700 }}>{stk.sym}</td>
+                  <td style={{ padding: "10px 12px", fontWeight: 700 }}>
+                    <button onClick={() => setDetailSymbol(stk.sym)} style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontWeight: 700, color: COLORS.primary, cursor: "pointer", textDecoration: "underline" }}>
+                      {stk.sym}
+                    </button>
+                  </td>
                   <td style={{ padding: "10px 12px", color: COLORS.textMuted }}>{stk.name}</td>
                   <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 600 }}>{q ? "$" + q.last.toFixed(2) : "—"}</td>
                   <td style={{ padding: "10px 12px", textAlign: "right", color, fontWeight: 700 }}>{q && q.pct != null ? arrow + " " + q.pct.toFixed(2) + "%" : "—"}</td>
@@ -4155,6 +4793,848 @@ function StockDashboard({ universe, setUniverse, canEdit }) {
           </div>
         </Card>
       )}
+
+      <StockDetailModal symbol={detailSymbol} open={!!detailSymbol} onClose={() => setDetailSymbol(null)} />
+    </div>
+  );
+}
+
+// ============================================================
+// MACRO DASHBOARD — yield curve, Fed funds, mortgage, client resources
+// ============================================================
+function MacroDashboard() {
+  const [yieldCurve, setYieldCurve] = useState([]);
+  const [fedRate, setFedRate] = useState(null);
+  const [fedHistory, setFedHistory] = useState([]);
+  const [mortgageRate, setMortgageRate] = useState(null);
+  const [mortgageHistory, setMortgageHistory] = useState([]);
+  const [tenYrHistory, setTenYrHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const yieldCanvasRef = useRef(null);
+  const yieldChartRef = useRef(null);
+  const fedCanvasRef = useRef(null);
+  const fedChartRef = useRef(null);
+  const tenYrCanvasRef = useRef(null);
+  const tenYrChartRef = useRef(null);
+
+  const loadAll = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      const [curve, fed, mortgage, tenYr] = await Promise.all([
+        fetchYieldCurve(),
+        fetchFRED("DFF", 365),
+        fetchFRED("MORTGAGE30US", 365),
+        fetchFRED("DGS10", 365),
+      ]);
+      setYieldCurve(curve);
+      setFedHistory(fed);
+      setFedRate(fed[fed.length - 1]?.value ?? null);
+      setMortgageHistory(mortgage);
+      setMortgageRate(mortgage[mortgage.length - 1]?.value ?? null);
+      setTenYrHistory(tenYr);
+    } catch (e) {
+      setError(e.message);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Yield curve chart
+  useEffect(() => {
+    if (!yieldCanvasRef.current || yieldCurve.length === 0) return;
+    if (yieldChartRef.current) { yieldChartRef.current.destroy(); yieldChartRef.current = null; }
+    const valid = yieldCurve.filter(p => p.value != null);
+    if (!valid.length) return;
+    yieldChartRef.current = new Chart(yieldCanvasRef.current, {
+      type: "line",
+      data: {
+        labels: valid.map(p => p.label),
+        datasets: [{
+          label: "US Treasury Yield (%)",
+          data: valid.map(p => p.value),
+          borderColor: COLORS.primary,
+          backgroundColor: COLORS.primary + "22",
+          fill: true, pointRadius: 4, pointBackgroundColor: COLORS.primary, borderWidth: 2, tension: 0.3,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          y: { title: { display: true, text: "Yield (%)" }, ticks: { callback: (v) => v.toFixed(2) + "%" } },
+          x: { title: { display: true, text: "Maturity" } },
+        },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => ctx.raw.toFixed(2) + "%" } } },
+      },
+    });
+    return () => { if (yieldChartRef.current) yieldChartRef.current.destroy(); };
+  }, [yieldCurve]);
+
+  // Fed funds rate history chart
+  useEffect(() => {
+    if (!fedCanvasRef.current || fedHistory.length === 0) return;
+    if (fedChartRef.current) { fedChartRef.current.destroy(); fedChartRef.current = null; }
+    fedChartRef.current = new Chart(fedCanvasRef.current, {
+      type: "line",
+      data: {
+        labels: fedHistory.map(d => d.date),
+        datasets: [{
+          label: "Fed Funds Rate (%)",
+          data: fedHistory.map(d => d.value),
+          borderColor: COLORS.primaryDark,
+          backgroundColor: COLORS.primaryDark + "15",
+          fill: true, pointRadius: 0, borderWidth: 2, tension: 0.1,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: { y: { ticks: { callback: (v) => v.toFixed(2) + "%" } } },
+        plugins: { legend: { display: false } },
+      },
+    });
+    return () => { if (fedChartRef.current) fedChartRef.current.destroy(); };
+  }, [fedHistory]);
+
+  // 10Y treasury rolling
+  useEffect(() => {
+    if (!tenYrCanvasRef.current || tenYrHistory.length === 0) return;
+    if (tenYrChartRef.current) { tenYrChartRef.current.destroy(); tenYrChartRef.current = null; }
+    tenYrChartRef.current = new Chart(tenYrCanvasRef.current, {
+      type: "line",
+      data: {
+        labels: tenYrHistory.map(d => d.date),
+        datasets: [{
+          label: "10Y Yield (%)",
+          data: tenYrHistory.map(d => d.value),
+          borderColor: COLORS.gold,
+          backgroundColor: COLORS.gold + "22",
+          fill: true, pointRadius: 0, borderWidth: 2, tension: 0.1,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: { y: { ticks: { callback: (v) => v.toFixed(2) + "%" } } },
+        plugins: { legend: { display: false } },
+      },
+    });
+    return () => { if (tenYrChartRef.current) tenYrChartRef.current.destroy(); };
+  }, [tenYrHistory]);
+
+  // Inversion detection
+  const tenYrVal = yieldCurve.find(p => p.label === "10Y")?.value;
+  const twoYrVal = yieldCurve.find(p => p.label === "2Y")?.value;
+  const inverted = (tenYrVal != null && twoYrVal != null && tenYrVal < twoYrVal);
+  const spread = (tenYrVal != null && twoYrVal != null) ? (tenYrVal - twoYrVal) : null;
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Macro Dashboard</h2>
+          <p style={{ color: COLORS.textMuted, fontSize: 13, margin: "4px 0 0" }}>
+            US Treasury yield curve, Fed funds rate, mortgage rates. Data from FRED (Federal Reserve Economic Data).
+          </p>
+        </div>
+        <Button size="sm" variant="ghost" onClick={loadAll}>{loading ? "Loading…" : "↻ Refresh"}</Button>
+      </div>
+
+      {error && (
+        <Card style={{ padding: 14, marginBottom: 16, background: COLORS.danger + "11", borderLeft: `4px solid ${COLORS.danger}` }}>
+          <div style={{ fontSize: 12, color: COLORS.danger }}>Failed to load data: {error}</div>
+        </Card>
+      )}
+
+      {/* Key rate cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
+        <Card style={{ padding: 16, borderLeft: `4px solid ${COLORS.primaryDark}` }}>
+          <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Fed Funds Rate</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.primaryDark, marginTop: 4 }}>{fedRate != null ? fedRate.toFixed(2) + "%" : "—"}</div>
+          <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 2 }}>FRED · DFF</div>
+        </Card>
+        <Card style={{ padding: 16, borderLeft: `4px solid ${COLORS.gold}` }}>
+          <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>10Y Treasury</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.text, marginTop: 4 }}>{tenYrVal != null ? tenYrVal.toFixed(2) + "%" : "—"}</div>
+          <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 2 }}>FRED · DGS10</div>
+        </Card>
+        <Card style={{ padding: 16, borderLeft: `4px solid ${COLORS.primary}` }}>
+          <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>30Y Mortgage</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.text, marginTop: 4 }}>{mortgageRate != null ? mortgageRate.toFixed(2) + "%" : "—"}</div>
+          <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 2 }}>FRED · MORTGAGE30US</div>
+        </Card>
+        <Card style={{ padding: 16, borderLeft: `4px solid ${inverted ? COLORS.danger : COLORS.success}` }}>
+          <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>10Y–2Y Spread</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: inverted ? COLORS.danger : COLORS.success, marginTop: 4 }}>
+            {spread != null ? (spread >= 0 ? "+" : "") + (spread * 100).toFixed(0) + " bps" : "—"}
+          </div>
+          <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 2 }}>{inverted ? "⚠ Inverted" : "Normal"}</div>
+        </Card>
+      </div>
+
+      {/* Yield curve chart */}
+      <Card style={{ padding: 18, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>US Treasury Yield Curve</div>
+            <div style={{ fontSize: 11, color: COLORS.textMuted }}>Latest available point at each maturity</div>
+          </div>
+          <a href="https://www.treasury.gov/resource-center/data-chart-center/interest-rates/Pages/TextView.aspx?data=yield" target="_blank" rel="noopener" style={{ fontSize: 11, color: COLORS.primary, textDecoration: "none" }}>treasury.gov ↗</a>
+        </div>
+        <div style={{ height: 280 }}><canvas ref={yieldCanvasRef} /></div>
+      </Card>
+
+      {/* Fed rate + 10Y rolling */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12, marginBottom: 16 }}>
+        <Card style={{ padding: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Fed Funds — 1 Year</div>
+            <a href="https://fred.stlouisfed.org/series/DFF" target="_blank" rel="noopener" style={{ fontSize: 11, color: COLORS.primary, textDecoration: "none" }}>FRED ↗</a>
+          </div>
+          <div style={{ height: 200 }}><canvas ref={fedCanvasRef} /></div>
+        </Card>
+        <Card style={{ padding: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>10Y Treasury — 1 Year</div>
+            <a href="https://fred.stlouisfed.org/series/DGS10" target="_blank" rel="noopener" style={{ fontSize: 11, color: COLORS.primary, textDecoration: "none" }}>FRED ↗</a>
+          </div>
+          <div style={{ height: 200 }}><canvas ref={tenYrCanvasRef} /></div>
+        </Card>
+      </div>
+
+      {/* FOMC + sentiment placeholder */}
+      <Card style={{ padding: 18, marginBottom: 16, background: COLORS.bg }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>FOMC — Next Meeting & Market Expectations</div>
+            <div style={{ fontSize: 11, color: COLORS.textMuted }}>Live probabilities from CME FedWatch (coming in a future build)</div>
+          </div>
+        </div>
+        <div style={{ fontSize: 13, color: COLORS.textMuted, lineHeight: 1.6 }}>
+          Live rate-decision probabilities are published by CME Group. The official tool is at the link below — opens in a new tab. (We'll integrate live FedWatch data here in a future build once we've validated the endpoint's stability.)
+        </div>
+        <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <a href="https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html" target="_blank" rel="noopener" style={{ fontSize: 12, padding: "8px 14px", borderRadius: 6, background: COLORS.primary, color: "white", textDecoration: "none", fontWeight: 600 }}>CME FedWatch Tool ↗</a>
+          <a href="https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm" target="_blank" rel="noopener" style={{ fontSize: 12, padding: "8px 14px", borderRadius: 6, background: COLORS.surface, color: COLORS.text, textDecoration: "none", fontWeight: 600, border: `1px solid ${COLORS.border}` }}>FOMC Calendar ↗</a>
+        </div>
+      </Card>
+
+      {/* Client-facing presentation links */}
+      <Card style={{ padding: 18, borderLeft: `4px solid ${COLORS.primary}` }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Client-Facing Market Resources</div>
+        <div style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 14, lineHeight: 1.5 }}>
+          These are published by third parties (free to view, copyrighted to their publishers). Use as supplemental client material — open in a new tab.
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
+          <a href="https://am.jpmorgan.com/us/en/asset-management/institutional/insights/market-insights/guide-to-the-markets/" target="_blank" rel="noopener"
+             style={{ display: "block", padding: 16, borderRadius: 10, background: COLORS.surface, border: `1px solid ${COLORS.border}`, textDecoration: "none", color: COLORS.text }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.primary, marginBottom: 4 }}>JPM Guide to the Markets ↗</div>
+            <div style={{ fontSize: 12, color: COLORS.textMuted, lineHeight: 1.5 }}>
+              JPMorgan Asset Management's quarterly market outlook. Charts, allocations, valuations — the industry standard client deck.
+            </div>
+          </a>
+          <a href="https://www.franklintempleton.com/insights/anatomy-of-a-recession" target="_blank" rel="noopener"
+             style={{ display: "block", padding: 16, borderRadius: 10, background: COLORS.surface, border: `1px solid ${COLORS.border}`, textDecoration: "none", color: COLORS.text }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.primary, marginBottom: 4 }}>Franklin Templeton · Anatomy of a Recession ↗</div>
+            <div style={{ fontSize: 12, color: COLORS.textMuted, lineHeight: 1.5 }}>
+              Interactive recession indicators dashboard: GDP, employment, yield curve, leading indicators. Updated regularly.
+            </div>
+          </a>
+          <a href="https://www.bls.gov/" target="_blank" rel="noopener"
+             style={{ display: "block", padding: 16, borderRadius: 10, background: COLORS.surface, border: `1px solid ${COLORS.border}`, textDecoration: "none", color: COLORS.text }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.primary, marginBottom: 4 }}>Bureau of Labor Statistics ↗</div>
+            <div style={{ fontSize: 12, color: COLORS.textMuted, lineHeight: 1.5 }}>
+              CPI, employment, jobs, wages. Official source for the inflation and labor market data you cite to clients.
+            </div>
+          </a>
+          <a href="https://www.federalreserve.gov/monetarypolicy/fomcprojtabl20250319.htm" target="_blank" rel="noopener"
+             style={{ display: "block", padding: 16, borderRadius: 10, background: COLORS.surface, border: `1px solid ${COLORS.border}`, textDecoration: "none", color: COLORS.text }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.primary, marginBottom: 4 }}>FOMC Summary of Economic Projections ↗</div>
+            <div style={{ fontSize: 12, color: COLORS.textMuted, lineHeight: 1.5 }}>
+              The Fed's official quarterly outlook (the "dot plot"). What Fed members expect for rates, inflation, GDP, unemployment.
+            </div>
+          </a>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// RISK PROFILER — 5-question questionnaire → score → recommended model
+// ============================================================
+const RISK_QUESTIONS = [
+  {
+    id: "horizon",
+    text: "What is your investment time horizon?",
+    options: [
+      { label: "Less than 3 years", score: 1 },
+      { label: "3 to 5 years", score: 2 },
+      { label: "5 to 10 years", score: 3 },
+      { label: "10 to 20 years", score: 4 },
+      { label: "More than 20 years", score: 5 },
+    ],
+  },
+  {
+    id: "drawdown",
+    text: "Your portfolio drops 25% in a single year. What do you do?",
+    options: [
+      { label: "Sell everything — preserve what's left", score: 1 },
+      { label: "Sell some — reduce exposure", score: 2 },
+      { label: "Do nothing — stick to the plan", score: 3 },
+      { label: "Buy more — markets recover", score: 4 },
+      { label: "Buy aggressively — this is the opportunity", score: 5 },
+    ],
+  },
+  {
+    id: "objective",
+    text: "What's your primary investment objective?",
+    options: [
+      { label: "Capital preservation — protect what I have", score: 1 },
+      { label: "Income — generate steady cash flow", score: 2 },
+      { label: "Balanced — moderate income + growth", score: 3 },
+      { label: "Growth — maximize long-term appreciation", score: 4 },
+      { label: "Aggressive growth — accept high volatility", score: 5 },
+    ],
+  },
+  {
+    id: "income",
+    text: "What percentage of your annual income is tied up in investments?",
+    options: [
+      { label: "Less than 10%", score: 5 },
+      { label: "10–25%", score: 4 },
+      { label: "25–50%", score: 3 },
+      { label: "50–75%", score: 2 },
+      { label: "More than 75% — this is most of my wealth", score: 1 },
+    ],
+  },
+  {
+    id: "experience",
+    text: "How much investment experience do you have?",
+    options: [
+      { label: "None — first-time investor", score: 1 },
+      { label: "Limited — a few years of basic investing", score: 2 },
+      { label: "Moderate — diversified portfolio, multiple cycles", score: 3 },
+      { label: "Experienced — comfortable with options, alternatives", score: 4 },
+      { label: "Professional — work in finance or trade actively", score: 5 },
+    ],
+  },
+];
+
+const RISK_PROFILES = [
+  { min: 5,  max: 9,  name: "Conservative",         color: "#1FB67D", allocation: "20% Stocks / 70% Bonds / 10% Cash", desc: "Capital preservation. Low volatility. Suitable for short horizons or low risk tolerance." },
+  { min: 10, max: 14, name: "Moderate Conservative", color: "#2FACEA", allocation: "40% Stocks / 55% Bonds / 5% Cash",  desc: "Income with modest growth. Some volatility accepted in exchange for higher long-term returns." },
+  { min: 15, max: 18, name: "Balanced",             color: "#EAC82E", allocation: "60% Stocks / 35% Bonds / 5% Cash",  desc: "Balanced growth and income. The classic 60/40-style portfolio. Suitable for most long-term investors." },
+  { min: 19, max: 22, name: "Growth",               color: "#0B2853", allocation: "80% Stocks / 18% Bonds / 2% Cash",  desc: "Long-term capital appreciation. Higher volatility. Suitable for 10+ year horizons." },
+  { min: 23, max: 25, name: "Aggressive Growth",    color: "#D9534F", allocation: "95% Stocks / 5% Bonds / 0% Cash",   desc: "Maximum long-term growth. High volatility. Significant drawdowns expected. 15+ year horizons only." },
+];
+
+function RiskProfiler() {
+  const [answers, setAnswers] = useState({});
+  const [showResult, setShowResult] = useState(false);
+  const [clientName, setClientName] = useState("");
+  const [clientDate, setClientDate] = useState(new Date().toISOString().split("T")[0]);
+
+  const allAnswered = RISK_QUESTIONS.every(q => answers[q.id] != null);
+  const score = Object.values(answers).reduce((sum, v) => sum + (v || 0), 0);
+  const profile = RISK_PROFILES.find(p => score >= p.min && score <= p.max);
+
+  const reset = () => {
+    setAnswers({});
+    setShowResult(false);
+    setClientName("");
+    setClientDate(new Date().toISOString().split("T")[0]);
+  };
+
+  const printResult = () => {
+    window.print();
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Risk Tolerance Profiler</h2>
+          <p style={{ color: COLORS.textMuted, fontSize: 13, margin: "4px 0 0" }}>
+            5-question assessment to recommend a starting portfolio model. Use as a conversation starter — not a substitute for full financial planning.
+          </p>
+        </div>
+        {showResult && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button size="sm" variant="ghost" onClick={reset}>Start Over</Button>
+            <Button size="sm" onClick={printResult}>Print</Button>
+          </div>
+        )}
+      </div>
+
+      {!showResult && (
+        <>
+          {/* Client info */}
+          <Card style={{ padding: 18, marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>Client Information (optional)</div>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
+              <Input label="Client name" value={clientName} onChange={setClientName} placeholder="Jane Doe" />
+              <Input label="Date" type="date" value={clientDate} onChange={setClientDate} />
+            </div>
+          </Card>
+
+          {/* Questions */}
+          {RISK_QUESTIONS.map((q, i) => (
+            <Card key={q.id} style={{ padding: 18, marginBottom: 12 }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 12 }}>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: COLORS.primary, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>{i + 1}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.text, lineHeight: 1.4 }}>{q.text}</div>
+              </div>
+              <div style={{ marginLeft: 40, display: "flex", flexDirection: "column", gap: 6 }}>
+                {q.options.map((opt, oi) => (
+                  <label key={oi} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 12px", borderRadius: 6, background: answers[q.id] === opt.score ? COLORS.primary + "11" : "transparent", border: `1px solid ${answers[q.id] === opt.score ? COLORS.primary : COLORS.borderLight}` }}>
+                    <input
+                      type="radio"
+                      name={q.id}
+                      checked={answers[q.id] === opt.score}
+                      onChange={() => setAnswers({ ...answers, [q.id]: opt.score })}
+                      style={{ cursor: "pointer" }}
+                    />
+                    <span style={{ fontSize: 13, color: COLORS.text }}>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </Card>
+          ))}
+
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 18 }}>
+            <Button onClick={() => setShowResult(true)} disabled={!allAnswered}>
+              {allAnswered ? `See Result (${Object.keys(answers).length} of ${RISK_QUESTIONS.length} answered)` : `Answer all ${RISK_QUESTIONS.length} questions to continue`}
+            </Button>
+          </div>
+        </>
+      )}
+
+      {showResult && profile && (
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "24px 28px", background: `linear-gradient(135deg, ${profile.color} 0%, ${COLORS.primaryDark} 100%)`, color: "white" }}>
+            {clientName && <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 4 }}>For {clientName} · {clientDate}</div>}
+            <div style={{ fontSize: 11, opacity: 0.85, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600 }}>Risk Profile</div>
+            <div style={{ fontSize: 34, fontWeight: 800, marginTop: 4, lineHeight: 1 }}>{profile.name}</div>
+            <div style={{ fontSize: 14, opacity: 0.9, marginTop: 8 }}>Score: <b>{score} / 25</b></div>
+          </div>
+          <div style={{ padding: 24 }}>
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, fontWeight: 600 }}>Recommended Allocation</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.text }}>{profile.allocation}</div>
+            </div>
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, fontWeight: 600 }}>Strategy Description</div>
+              <div style={{ fontSize: 14, color: COLORS.text, lineHeight: 1.6 }}>{profile.desc}</div>
+            </div>
+
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>Answer Summary</div>
+              <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                <tbody>
+                  {RISK_QUESTIONS.map((q, i) => {
+                    const score = answers[q.id];
+                    const choice = q.options.find(o => o.score === score);
+                    return (
+                      <tr key={q.id} style={{ borderTop: i === 0 ? "none" : `1px solid ${COLORS.borderLight}` }}>
+                        <td style={{ padding: "8px 0", width: 24, color: COLORS.textMuted }}>{i + 1}.</td>
+                        <td style={{ padding: "8px 0" }}>{q.text}</td>
+                        <td style={{ padding: "8px 0", color: COLORS.primary, fontWeight: 600, textAlign: "right" }}>{choice?.label || "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ padding: 12, background: COLORS.bg, borderRadius: 8, fontSize: 11, color: COLORS.textMuted, lineHeight: 1.5 }}>
+              <b>Disclaimer:</b> This questionnaire is a starting point for risk-tolerance discussion, not investment advice. Final allocation should reflect the full client picture — financial goals, tax situation, existing holdings, liquidity needs, and other factors that a 5-question quiz cannot capture. All investments carry risk of loss.
+            </div>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// QUARTERLY OUTLOOK — PointerOS-branded client-facing deck
+// Modeled in spirit after JPM Guide to the Markets (no copied content).
+// Owners edit the commentary; everyone reads/prints.
+// ============================================================
+
+// Asset classes to show in the cross-asset returns table
+const ASSET_CLASSES = [
+  { sym: "^GSPC", name: "S&P 500", category: "US Equity" },
+  { sym: "^DJI", name: "Dow Jones", category: "US Equity" },
+  { sym: "^IXIC", name: "Nasdaq", category: "US Equity" },
+  { sym: "^RUT", name: "Russell 2000", category: "US Equity" },
+  { sym: "EFA", name: "MSCI EAFE (Developed Intl)", category: "Intl Equity" },
+  { sym: "EEM", name: "MSCI Emerging Markets", category: "Intl Equity" },
+  { sym: "AGG", name: "US Aggregate Bond", category: "Fixed Income" },
+  { sym: "TLT", name: "20+ Year Treasury", category: "Fixed Income" },
+  { sym: "LQD", name: "Investment Grade Corp", category: "Fixed Income" },
+  { sym: "HYG", name: "High Yield Corporate", category: "Fixed Income" },
+  { sym: "GLD", name: "Gold", category: "Alternative" },
+  { sym: "USO", name: "Crude Oil", category: "Alternative" },
+  { sym: "VNQ", name: "US REITs", category: "Alternative" },
+];
+
+function QuarterlyOutlook({ canEdit, outlookData, saveOutlook }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(outlookData);
+  const [assetReturns, setAssetReturns] = useState({});
+  const [sectorReturns, setSectorReturns] = useState({});
+  const [yieldCurve, setYieldCurve] = useState([]);
+  const [keyRates, setKeyRates] = useState({});
+  const [loading, setLoading] = useState(true);
+  const yieldCanvasRef = useRef(null);
+  const yieldChartRef = useRef(null);
+
+  // Pull all data needed for the outlook
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    // Asset class returns — YTD, 1Y for each
+    const assetSyms = ASSET_CLASSES.map(a => a.sym);
+    const returns = {};
+    for (const sym of assetSyms) {
+      try {
+        const [ytd, oneYear] = await Promise.all([
+          fetchYahoo(sym, "ytd", "1d"),
+          fetchYahoo(sym, "1y", "1d").catch(() => null),
+        ]);
+        const cleanYtd = ytd.closes.filter(c => c !== null);
+        let ytdPct = null, oneYearPct = null;
+        if (cleanYtd.length >= 2) ytdPct = ((cleanYtd[cleanYtd.length - 1] - cleanYtd[0]) / cleanYtd[0]) * 100;
+        if (oneYear) {
+          const yc = oneYear.closes.filter(c => c !== null);
+          if (yc.length >= 2) oneYearPct = ((yc[yc.length - 1] - yc[0]) / yc[0]) * 100;
+        }
+        returns[sym] = { ytd: ytdPct, oneYear: oneYearPct };
+      } catch (e) { returns[sym] = { ytd: null, oneYear: null }; }
+    }
+    setAssetReturns(returns);
+
+    // Sector heatmap data (reuse SECTOR_ETFS list)
+    const sectors = {};
+    for (const s of SECTOR_ETFS) {
+      try {
+        const ytd = await fetchYahoo(s.sym, "ytd", "1d");
+        const clean = ytd.closes.filter(c => c !== null);
+        if (clean.length >= 2) sectors[s.sym] = ((clean[clean.length - 1] - clean[0]) / clean[0]) * 100;
+      } catch (e) { sectors[s.sym] = null; }
+    }
+    setSectorReturns(sectors);
+
+    // Yield curve from FRED
+    try {
+      const curve = await fetchYieldCurve();
+      setYieldCurve(curve);
+    } catch (e) {}
+
+    // Key macro rates from FRED
+    try {
+      const [fed, mortgage, cpi, unemp] = await Promise.all([
+        fetchFRED("DFF", 30),
+        fetchFRED("MORTGAGE30US", 30),
+        fetchFRED("CPIAUCSL", 90),   // CPI all urban consumers, NSA
+        fetchFRED("UNRATE", 90),     // Unemployment rate
+      ]);
+      const latest = (arr) => arr.length > 0 ? arr[arr.length - 1].value : null;
+      // For CPI: compute YoY change
+      let cpiYoY = null;
+      try {
+        const cpiHistory = await fetchFRED("CPIAUCSL", 400);
+        if (cpiHistory.length >= 12) {
+          const newest = cpiHistory[cpiHistory.length - 1].value;
+          const yearAgo = cpiHistory[cpiHistory.length - 13]?.value;
+          if (yearAgo) cpiYoY = ((newest - yearAgo) / yearAgo) * 100;
+        }
+      } catch (e) {}
+      setKeyRates({
+        fedFunds: latest(fed),
+        mortgage: latest(mortgage),
+        cpiYoY,
+        unemployment: latest(unemp),
+      });
+    } catch (e) {}
+
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => { setDraft(outlookData); }, [outlookData, editing]);
+
+  // Yield curve chart
+  useEffect(() => {
+    if (!yieldCanvasRef.current || yieldCurve.length === 0) return;
+    if (yieldChartRef.current) { yieldChartRef.current.destroy(); yieldChartRef.current = null; }
+    const valid = yieldCurve.filter(p => p.value != null);
+    if (!valid.length) return;
+    yieldChartRef.current = new Chart(yieldCanvasRef.current, {
+      type: "line",
+      data: {
+        labels: valid.map(p => p.label),
+        datasets: [{
+          label: "Treasury Yield (%)",
+          data: valid.map(p => p.value),
+          borderColor: COLORS.primary,
+          backgroundColor: COLORS.primary + "22",
+          fill: true, pointRadius: 5, pointBackgroundColor: COLORS.primary, borderWidth: 2.5, tension: 0.3,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: { y: { title: { display: true, text: "Yield (%)" }, ticks: { callback: (v) => v.toFixed(2) + "%" } } },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => ctx.raw.toFixed(2) + "%" } } },
+      },
+    });
+    return () => { if (yieldChartRef.current) yieldChartRef.current.destroy(); };
+  }, [yieldCurve]);
+
+  const handleSave = () => {
+    saveOutlook(draft);
+    setEditing(false);
+  };
+
+  const handleCancel = () => {
+    setDraft(outlookData);
+    setEditing(false);
+  };
+
+  // Inversion detection
+  const tenYrVal = yieldCurve.find(p => p.label === "10Y")?.value;
+  const twoYrVal = yieldCurve.find(p => p.label === "2Y")?.value;
+  const inverted = (tenYrVal != null && twoYrVal != null && tenYrVal < twoYrVal);
+
+  // Group assets by category for the returns table
+  const grouped = {};
+  ASSET_CLASSES.forEach(a => {
+    if (!grouped[a.category]) grouped[a.category] = [];
+    grouped[a.category].push(a);
+  });
+
+  return (
+    <div>
+      {/* Top action bar — hidden on print */}
+      <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Quarterly Market Outlook</h2>
+          <p style={{ color: COLORS.textMuted, fontSize: 13, margin: "4px 0 0" }}>
+            Client-facing presentation. {canEdit ? "You can edit commentary as the owner." : "View-only — only Matt and Alex can edit commentary."}
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {canEdit && !editing && <Button onClick={() => setEditing(true)}><IconEdit size={14} /> Edit Commentary</Button>}
+          {editing && (
+            <>
+              <Button variant="ghost" onClick={handleCancel}>Cancel</Button>
+              <Button onClick={handleSave}>Save</Button>
+            </>
+          )}
+          {!editing && <Button variant="outline" onClick={() => window.print()}>🖨 Print</Button>}
+        </div>
+      </div>
+
+      {/* === COVER PAGE === */}
+      <div style={{ padding: "48px 36px", background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDark} 100%)`, color: "white", borderRadius: 16, marginBottom: 24, position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: 0, right: 0, width: 200, height: 200, background: COLORS.gold + "22", borderRadius: "50%", transform: "translate(60px, -60px)" }} />
+        <div style={{ position: "relative" }}>
+          <div style={{ fontSize: 13, opacity: 0.85, textTransform: "uppercase", letterSpacing: 2, fontWeight: 600 }}>Pointer Financial Group</div>
+          {editing ? (
+            <div style={{ display: "flex", gap: 8, marginTop: 8, marginBottom: 16 }}>
+              <select value={draft.quarter} onChange={e => setDraft({ ...draft, quarter: e.target.value })}
+                style={{ padding: "6px 10px", borderRadius: 6, border: "none", fontSize: 14, fontFamily: "inherit", fontWeight: 700 }}>
+                <option value="Q1">Q1</option><option value="Q2">Q2</option><option value="Q3">Q3</option><option value="Q4">Q4</option>
+              </select>
+              <input type="number" value={draft.year} onChange={e => setDraft({ ...draft, year: e.target.value })}
+                style={{ padding: "6px 10px", borderRadius: 6, border: "none", fontSize: 14, fontFamily: "inherit", fontWeight: 700, width: 100 }} />
+            </div>
+          ) : (
+            <h1 style={{ margin: "8px 0 16px", fontSize: 42, fontWeight: 800, lineHeight: 1.1 }}>{outlookData.quarter} {outlookData.year} Market Outlook</h1>
+          )}
+          <div style={{ fontSize: 14, opacity: 0.9, maxWidth: 720, lineHeight: 1.7 }}>
+            {editing ? (
+              <textarea value={draft.thesis} onChange={e => setDraft({ ...draft, thesis: e.target.value })} rows={6}
+                style={{ width: "100%", padding: 12, borderRadius: 8, border: "none", fontSize: 14, fontFamily: "inherit", lineHeight: 1.7, color: COLORS.text, background: "rgba(255,255,255,0.95)" }} />
+            ) : outlookData.thesis}
+          </div>
+        </div>
+      </div>
+
+      {/* === SECTION 1: Cross-Asset Returns === */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+          <div style={{ width: 4, height: 24, background: COLORS.gold, borderRadius: 2 }} />
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: COLORS.text }}>Cross-Asset Returns</h3>
+        </div>
+        <p style={{ fontSize: 13, color: COLORS.textMuted, marginBottom: 16, lineHeight: 1.5 }}>
+          Year-to-date and trailing 12-month total returns across major asset classes. Data pulled live from Yahoo Finance at the time of viewing.
+        </p>
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: COLORS.bg, textAlign: "left" }}>
+                <th style={{ padding: "10px 14px", fontWeight: 600 }}>Asset Class</th>
+                <th style={{ padding: "10px 14px", fontWeight: 600 }}>Symbol</th>
+                <th style={{ padding: "10px 14px", fontWeight: 600, textAlign: "right" }}>YTD</th>
+                <th style={{ padding: "10px 14px", fontWeight: 600, textAlign: "right" }}>1 Year</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(grouped).map(([cat, items]) => (
+                <React.Fragment key={cat}>
+                  <tr style={{ background: COLORS.primary + "08" }}>
+                    <td colSpan={4} style={{ padding: "8px 14px", fontSize: 11, fontWeight: 700, color: COLORS.primary, textTransform: "uppercase", letterSpacing: 1 }}>{cat}</td>
+                  </tr>
+                  {items.map(a => {
+                    const r = assetReturns[a.sym] || {};
+                    return (
+                      <tr key={a.sym} style={{ borderTop: `1px solid ${COLORS.borderLight}` }}>
+                        <td style={{ padding: "10px 14px" }}>{a.name}</td>
+                        <td style={{ padding: "10px 14px", color: COLORS.textMuted, fontFamily: "ui-monospace, monospace", fontSize: 12 }}>{a.sym}</td>
+                        <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: r.ytd == null ? COLORS.textMuted : (r.ytd >= 0 ? COLORS.success : COLORS.danger) }}>
+                          {r.ytd == null ? (loading ? "…" : "—") : (r.ytd >= 0 ? "+" : "") + r.ytd.toFixed(2) + "%"}
+                        </td>
+                        <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: r.oneYear == null ? COLORS.textMuted : (r.oneYear >= 0 ? COLORS.success : COLORS.danger) }}>
+                          {r.oneYear == null ? (loading ? "…" : "—") : (r.oneYear >= 0 ? "+" : "") + r.oneYear.toFixed(2) + "%"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      </div>
+
+      {/* === SECTION 2: Macro Snapshot === */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+          <div style={{ width: 4, height: 24, background: COLORS.gold, borderRadius: 2 }} />
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: COLORS.text }}>Macro Snapshot</h3>
+        </div>
+        <p style={{ fontSize: 13, color: COLORS.textMuted, marginBottom: 16, lineHeight: 1.5 }}>
+          Key macroeconomic indicators from the Federal Reserve. Latest available reading at the time of viewing.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+          <Card style={{ padding: 18, borderLeft: `4px solid ${COLORS.primary}` }}>
+            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Fed Funds Rate</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.primaryDark, marginTop: 4 }}>{keyRates.fedFunds != null ? keyRates.fedFunds.toFixed(2) + "%" : (loading ? "…" : "—")}</div>
+            <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 4 }}>Effective rate · daily</div>
+          </Card>
+          <Card style={{ padding: 18, borderLeft: `4px solid ${COLORS.gold}` }}>
+            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>CPI Inflation (YoY)</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.text, marginTop: 4 }}>{keyRates.cpiYoY != null ? keyRates.cpiYoY.toFixed(1) + "%" : (loading ? "…" : "—")}</div>
+            <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 4 }}>All Urban Consumers</div>
+          </Card>
+          <Card style={{ padding: 18, borderLeft: `4px solid ${COLORS.primary}` }}>
+            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Unemployment Rate</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.text, marginTop: 4 }}>{keyRates.unemployment != null ? keyRates.unemployment.toFixed(1) + "%" : (loading ? "…" : "—")}</div>
+            <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 4 }}>U-3 · monthly</div>
+          </Card>
+          <Card style={{ padding: 18, borderLeft: `4px solid ${COLORS.gold}` }}>
+            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>30Y Mortgage</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.text, marginTop: 4 }}>{keyRates.mortgage != null ? keyRates.mortgage.toFixed(2) + "%" : (loading ? "…" : "—")}</div>
+            <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 4 }}>US Average · weekly</div>
+          </Card>
+        </div>
+      </div>
+
+      {/* === SECTION 3: Treasury Yield Curve === */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+          <div style={{ width: 4, height: 24, background: COLORS.gold, borderRadius: 2 }} />
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: COLORS.text }}>US Treasury Yield Curve</h3>
+        </div>
+        <p style={{ fontSize: 13, color: COLORS.textMuted, marginBottom: 16, lineHeight: 1.5 }}>
+          Shape of the yield curve reflects market expectations for growth and inflation. {inverted ? "The curve is currently inverted between 2Y and 10Y — historically a recession leading indicator." : "The curve is currently normally shaped between 2Y and 10Y."}
+        </p>
+        <Card style={{ padding: 20 }}>
+          <div style={{ height: 280 }}><canvas ref={yieldCanvasRef} /></div>
+        </Card>
+      </div>
+
+      {/* === SECTION 4: Sector Performance === */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+          <div style={{ width: 4, height: 24, background: COLORS.gold, borderRadius: 2 }} />
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: COLORS.text }}>S&P Sector Performance — YTD</h3>
+        </div>
+        <p style={{ fontSize: 13, color: COLORS.textMuted, marginBottom: 16, lineHeight: 1.5 }}>
+          Year-to-date returns across S&P 500 sectors via SPDR sector ETFs. Helps frame which areas of the market are leading and lagging.
+        </p>
+        <Card style={{ padding: 18 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 6 }}>
+            {SECTOR_ETFS.map(s => {
+              const pct = sectorReturns[s.sym];
+              return (
+                <div key={s.sym} style={{ padding: "14px 10px", borderRadius: 8, background: heatColor(pct), color: "white", textAlign: "center" }}>
+                  <div style={{ fontSize: 10, opacity: 0.85, fontWeight: 600, marginBottom: 4 }}>{s.name}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>{pct != null ? (pct >= 0 ? "+" : "") + pct.toFixed(1) + "%" : "—"}</div>
+                  <div style={{ fontSize: 10, opacity: 0.8, marginTop: 2 }}>{s.sym}</div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </div>
+
+      {/* === SECTION 5: PointerOS Outlook (editable) === */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+          <div style={{ width: 4, height: 24, background: COLORS.gold, borderRadius: 2 }} />
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: COLORS.text }}>Our Outlook</h3>
+        </div>
+
+        {[
+          { key: "equities", label: "US & Global Equities", icon: "📈" },
+          { key: "fixedIncome", label: "Fixed Income", icon: "📊" },
+          { key: "alternatives", label: "Alternatives & Real Assets", icon: "💎" },
+          { key: "risks", label: "Key Risks We're Watching", icon: "⚠️" },
+        ].map(section => (
+          <Card key={section.key} style={{ padding: 20, marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <span style={{ fontSize: 22 }}>{section.icon}</span>
+              <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: COLORS.text }}>{section.label}</h4>
+            </div>
+            {editing ? (
+              <textarea value={draft[section.key] || ""} onChange={e => setDraft({ ...draft, [section.key]: e.target.value })} rows={5}
+                style={{ width: "100%", padding: 12, borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 14, fontFamily: "inherit", lineHeight: 1.7, color: COLORS.text, boxSizing: "border-box" }} />
+            ) : (
+              <div style={{ fontSize: 14, color: COLORS.text, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+                {outlookData[section.key] || <span style={{ color: COLORS.textMuted, fontStyle: "italic" }}>(No commentary yet)</span>}
+              </div>
+            )}
+          </Card>
+        ))}
+      </div>
+
+      {/* === SECTION 6: Closing & Disclaimer === */}
+      <div style={{ marginBottom: 16 }}>
+        <Card style={{ padding: 24, background: COLORS.bg, borderLeft: `4px solid ${COLORS.primary}` }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.text, marginBottom: 8 }}>Closing Thought</div>
+          {editing ? (
+            <textarea value={draft.closingNote || ""} onChange={e => setDraft({ ...draft, closingNote: e.target.value })} rows={3}
+              style={{ width: "100%", padding: 12, borderRadius: 8, border: `1px solid ${COLORS.border}`, fontSize: 14, fontFamily: "inherit", lineHeight: 1.7, color: COLORS.text, boxSizing: "border-box" }} />
+          ) : (
+            <div style={{ fontSize: 14, color: COLORS.text, lineHeight: 1.7, fontStyle: "italic", marginBottom: 16 }}>
+              {outlookData.closingNote}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <Card style={{ padding: 18, background: COLORS.surface, marginBottom: 16 }}>
+        <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 8 }}>Important Disclosures</div>
+        <div style={{ fontSize: 11, color: COLORS.textMuted, lineHeight: 1.6 }}>
+          This presentation has been prepared by Pointer Financial Group for informational purposes only. Information contained herein is believed to be accurate but is not warranted. The views expressed represent the opinions of Pointer Financial Group and are subject to change without notice. This is not a solicitation or recommendation to buy or sell any security. Past performance is not indicative of future results. All investments carry risk of loss, including possible loss of principal. Asset class data sourced from Yahoo Finance; macroeconomic indicators sourced from the Federal Reserve Bank of St. Louis (FRED). Clients should review their individual circumstances with their advisor before making investment decisions.
+        </div>
+      </Card>
+
+      <div style={{ textAlign: "center", padding: 16, color: COLORS.textMuted, fontSize: 11 }}>
+        Pointer Financial Group · {outlookData.quarter} {outlookData.year} Market Outlook · Generated {new Date().toLocaleDateString()}
+      </div>
     </div>
   );
 }
