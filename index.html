@@ -2883,6 +2883,121 @@ const SECTOR_ETFS = [
   { sym: "XLB", name: "Materials" },
 ];
 
+// ============================================================
+// SUB-INDUSTRY / SUB-SECTOR ETF MAP
+// Each parent sector → list of industry ETFs that live inside it.
+// Picked for liquidity and recognizability. Real tickers, all S&P 500 or
+// MSCI-style industry exposure.
+// ============================================================
+const SUB_INDUSTRY_ETFS = {
+  XLK: [
+    { sym: "SOXX",  name: "Semiconductors" },
+    { sym: "SMH",   name: "Semiconductors (VanEck)" },
+    { sym: "IGV",   name: "Software" },
+    { sym: "HACK",  name: "Cybersecurity" },
+    { sym: "CIBR",  name: "Cybersecurity (First Trust)" },
+    { sym: "FDN",   name: "Internet" },
+    { sym: "WCLD",  name: "Cloud Computing" },
+    { sym: "AIQ",   name: "AI & Big Data" },
+    { sym: "ROBO",  name: "Robotics & AI" },
+    { sym: "FINX",  name: "FinTech" },
+  ],
+  XLF: [
+    { sym: "KBE",   name: "Banks (Broad)" },
+    { sym: "KRE",   name: "Regional Banks" },
+    { sym: "IAI",   name: "Broker-Dealers" },
+    { sym: "IAK",   name: "Insurance" },
+    { sym: "KIE",   name: "Insurance (S&P)" },
+    { sym: "KCE",   name: "Capital Markets" },
+    { sym: "EUFN",  name: "European Financials" },
+  ],
+  XLV: [
+    { sym: "IBB",   name: "Biotech (iShares)" },
+    { sym: "XBI",   name: "Biotech (SPDR Equal Wt)" },
+    { sym: "IHF",   name: "Healthcare Providers" },
+    { sym: "IHI",   name: "Medical Devices" },
+    { sym: "IHE",   name: "Pharmaceuticals" },
+    { sym: "PJP",   name: "Pharma (Invesco)" },
+    { sym: "PPH",   name: "Pharmaceuticals (VanEck)" },
+    { sym: "GNOM",  name: "Genomics" },
+  ],
+  XLY: [
+    { sym: "XRT",   name: "Retail" },
+    { sym: "FXD",   name: "Discretionary (1st Trust)" },
+    { sym: "PEJ",   name: "Leisure & Entertainment" },
+    { sym: "CARZ",  name: "Auto Industry" },
+    { sym: "PEZ",   name: "Discretionary (Equal Wt)" },
+  ],
+  XLC: [
+    { sym: "SOCL",  name: "Social Media" },
+    { sym: "ESPO",  name: "Video Games & eSports" },
+    { sym: "PBS",   name: "Media (Dynamic)" },
+    { sym: "FDN",   name: "Internet" },
+  ],
+  XLI: [
+    { sym: "ITA",   name: "Aerospace & Defense" },
+    { sym: "JETS",  name: "Airlines" },
+    { sym: "IYT",   name: "Transportation" },
+    { sym: "XAR",   name: "Aerospace & Defense (SPDR)" },
+    { sym: "PKB",   name: "Building & Construction" },
+    { sym: "FXR",   name: "Industrials (1st Trust)" },
+  ],
+  XLP: [
+    { sym: "PBJ",   name: "Food & Beverage" },
+    { sym: "FXG",   name: "Staples (1st Trust)" },
+    { sym: "PSL",   name: "Staples (Equal Wt)" },
+  ],
+  XLE: [
+    { sym: "XOP",   name: "Oil & Gas Exploration" },
+    { sym: "OIH",   name: "Oil Services" },
+    { sym: "PXE",   name: "Energy Explorers" },
+    { sym: "FCG",   name: "Natural Gas" },
+    { sym: "ICLN",  name: "Clean Energy" },
+    { sym: "TAN",   name: "Solar" },
+    { sym: "FAN",   name: "Wind Energy" },
+    { sym: "URA",   name: "Uranium" },
+  ],
+  XLU: [
+    { sym: "JXI",   name: "Global Utilities" },
+    { sym: "FXU",   name: "Utilities (1st Trust)" },
+    { sym: "PUI",   name: "Utilities (Dynamic)" },
+  ],
+  XLRE: [
+    { sym: "VNQ",   name: "US REITs (Vanguard)" },
+    { sym: "REZ",   name: "Residential REITs" },
+    { sym: "REM",   name: "Mortgage REITs" },
+    { sym: "PSR",   name: "Active US REITs" },
+    { sym: "FREL",  name: "Real Estate (1st Trust)" },
+  ],
+  XLB: [
+    { sym: "GDX",   name: "Gold Miners" },
+    { sym: "GDXJ",  name: "Junior Gold Miners" },
+    { sym: "SIL",   name: "Silver Miners" },
+    { sym: "COPX",  name: "Copper Miners" },
+    { sym: "LIT",   name: "Lithium & Battery Tech" },
+    { sym: "REMX",  name: "Rare Earth & Strategic" },
+    { sym: "SLX",   name: "Steel Producers" },
+  ],
+};
+
+// FOMC meeting schedule. Updated annually by hand from federalreserve.gov.
+// Dates are the conclusion (decision) day of each two-day meeting.
+const FOMC_SCHEDULE_2026 = [
+  { date: "2026-01-28", note: "Q1 — no SEP" },
+  { date: "2026-03-18", note: "Q1 — with SEP & press conf" },
+  { date: "2026-04-29", note: "Q2 — no SEP" },
+  { date: "2026-06-17", note: "Q2 — with SEP & press conf" },
+  { date: "2026-07-29", note: "Q3 — no SEP" },
+  { date: "2026-09-16", note: "Q3 — with SEP & press conf" },
+  { date: "2026-10-28", note: "Q4 — no SEP" },
+  { date: "2026-12-09", note: "Q4 — with SEP & press conf" },
+];
+
+// Flat list of all sub-industry ETFs (for the dislocation scanner)
+const ALL_SUB_INDUSTRIES = Object.entries(SUB_INDUSTRY_ETFS).flatMap(([parent, items]) =>
+  items.map(i => ({ ...i, parent }))
+);
+
 // Key macro indicators
 const KEY_INDICATORS = [
   { sym: "^VIX", name: "VIX", desc: "Volatility", format: "raw" },
@@ -2977,35 +3092,39 @@ const ViewSwitcher = ({ actualUser, viewAs, setViewAs }) => {
 // financialData, calendarEvents
 // ============================================================
 async function fetchYahooQuoteSummary(symbol) {
-  const modules = [
-    "summaryDetail",
-    "defaultKeyStatistics",
-    "earnings",
-    "earningsHistory",
-    "earningsTrend",
-    "incomeStatementHistoryQuarterly",
-    "financialData",
-    "calendarEvents",
-    "price",
-  ].join(",");
-  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${modules}`;
-  const json = await fetchThroughProxies(url, { expectJSON: true, timeoutMs: 10000 });
-  const r = json?.quoteSummary?.result?.[0];
-  if (!r) throw new Error("No quoteSummary data for " + symbol);
-  // Helper to safely unwrap Yahoo's {raw: x, fmt: "..."} objects
+  // Yahoo's quoteSummary can be picky — if you request a module that
+  // doesn't apply to the security type (e.g. earningsHistory on an ETF),
+  // the whole call returns 404. We split into two requests: a "core" set
+  // that works for everything, and a "stock-only" set we tolerate failing.
+  const coreModules = ["summaryDetail", "price", "defaultKeyStatistics"].join(",");
+  const stockModules = ["earnings", "earningsHistory", "earningsTrend", "incomeStatementHistoryQuarterly", "financialData", "calendarEvents"].join(",");
   const u = (obj) => obj && typeof obj === "object" && "raw" in obj ? obj.raw : (obj ?? null);
-  const summary = r.summaryDetail || {};
-  const stats = r.defaultKeyStatistics || {};
-  const fin = r.financialData || {};
-  const price = r.price || {};
-  const earnings = r.earnings || {};
-  const earningsHistory = r.earningsHistory?.history || [];
-  const earningsTrend = r.earningsTrend?.trend || [];
-  const incomeQuarterly = r.incomeStatementHistoryQuarterly?.incomeStatementHistory || [];
-  const cal = r.calendarEvents || {};
+
+  const coreUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${coreModules}`;
+  const stockUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${stockModules}`;
+
+  // Core MUST succeed. Stock-only is best-effort.
+  const coreJson = await fetchThroughProxies(coreUrl, { expectJSON: true, timeoutMs: 10000 });
+  const core = coreJson?.quoteSummary?.result?.[0];
+  if (!core) throw new Error("No quoteSummary data for " + symbol);
+  let stock = null;
+  try {
+    const stockJson = await fetchThroughProxies(stockUrl, { expectJSON: true, timeoutMs: 10000 });
+    stock = stockJson?.quoteSummary?.result?.[0];
+  } catch (e) { /* expected for ETFs */ }
+
+  const summary = core.summaryDetail || {};
+  const stats = core.defaultKeyStatistics || {};
+  const price = core.price || {};
+  const fin = stock?.financialData || {};
+  const earnings = stock?.earnings || {};
+  const earningsHistory = stock?.earningsHistory?.history || [];
+  const incomeQuarterly = stock?.incomeStatementHistoryQuarterly?.incomeStatementHistory || [];
+  const cal = stock?.calendarEvents || {};
   return {
     symbol,
     name: u(price.longName) || u(price.shortName) || symbol,
+    quoteType: u(price.quoteType),   // "EQUITY" | "ETF" | etc.
     marketCap: u(price.marketCap),
     last: u(price.regularMarketPrice),
     pe: u(summary.trailingPE),
@@ -3028,7 +3147,6 @@ async function fetchYahooQuoteSummary(symbol) {
     earningsGrowth: u(fin.earningsGrowth),
     debtToEquity: u(fin.debtToEquity),
     returnOnEquity: u(fin.returnOnEquity),
-    // Earnings history — last 4-8 quarters
     earningsHistory: earningsHistory.map(e => ({
       quarter: u(e.quarter) ? new Date(u(e.quarter) * 1000).toISOString().split("T")[0] : null,
       epsActual: u(e.epsActual),
@@ -3036,7 +3154,6 @@ async function fetchYahooQuoteSummary(symbol) {
       surprisePct: u(e.surprisePercent),
       period: e.period,
     })),
-    // Income statement — last 4 quarters (Yahoo provides only 4 free)
     incomeQuarterly: incomeQuarterly.map(q => ({
       endDate: u(q.endDate) ? new Date(u(q.endDate) * 1000).toISOString().split("T")[0] : null,
       revenue: u(q.totalRevenue),
@@ -3044,10 +3161,9 @@ async function fetchYahooQuoteSummary(symbol) {
       grossProfit: u(q.grossProfit),
       operatingIncome: u(q.operatingIncome),
     })),
-    // Upcoming earnings + ex-div
-    nextEarningsDate: cal.earnings?.earningsDate?.[0] ? new Date(u(cal.earnings.earningsDate[0]) * 1000) : null,
-    nextEarningsEstimate: u(cal.earnings?.earningsAverage),
-    nextDividendDate: u(cal.exDividendDate) ? new Date(u(cal.exDividendDate) * 1000) : null,
+    nextEarningsDate: cal?.earnings?.earningsDate?.[0] ? new Date(u(cal.earnings.earningsDate[0]) * 1000) : null,
+    nextEarningsEstimate: u(cal?.earnings?.earningsAverage),
+    nextDividendDate: u(cal?.exDividendDate) ? new Date(u(cal.exDividendDate) * 1000) : null,
   };
 }
 
@@ -3342,6 +3458,7 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
   const [modelRatings, setModelRatings] = useState({});   // { modelName: { symbol: 1-5 } }
   const [modelBenchmark, setModelBenchmark] = useState("^GSPC"); // default to S&P 500
   const [stockDetailSymbol, setStockDetailSymbol] = useState(null); // clicking a model holding opens this
+  const [sectorDetail, setSectorDetail] = useState(null); // clicking a sector tile opens this
   const [outlookData, setOutlookData] = useState({
     quarter: "Q2",
     year: "2026",
@@ -3775,6 +3892,9 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
               </Card>
             )}
 
+            {/* PointerOS Signal — top dislocations & momentum */}
+            <PointerOSSignal onOpenSector={(s) => setSectorDetail(s)} onOpenStock={(sym) => setStockDetailSymbol(sym)} />
+
             {/* Live indices */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 16 }}>
               {BENCHMARKS.map(b => {
@@ -3833,9 +3953,9 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 6 }}>
                 {sectorData.map(s => (
-                  <button key={s.sym} onClick={() => setStockDetailSymbol(s.sym)}
+                  <button key={s.sym} onClick={() => setSectorDetail(s)}
                           style={{ padding: "12px 10px", borderRadius: 8, background: heatColor(s.pct), color: "white", textAlign: "center", border: "none", cursor: "pointer", fontFamily: "inherit" }}
-                          title={`Click for ${s.name} (${s.sym}) details`}>
+                          title={`Click to drill into ${s.name} sub-industries`}>
                     <div style={{ fontSize: 10, opacity: 0.85, fontWeight: 600, marginBottom: 4 }}>{s.name}</div>
                     <div style={{ fontSize: 15, fontWeight: 700 }}>{s.pct != null ? (s.pct >= 0 ? "+" : "") + s.pct.toFixed(2) + "%" : "—"}</div>
                     <div style={{ fontSize: 10, opacity: 0.8, marginTop: 2 }}>{s.sym}</div>
@@ -4077,6 +4197,7 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
 
       {/* Stock detail modal — shared across pages */}
       <StockDetailModal symbol={stockDetailSymbol} open={!!stockDetailSymbol} onClose={() => setStockDetailSymbol(null)} />
+      <SectorDetailModal sector={sectorDetail} open={!!sectorDetail} onClose={() => setSectorDetail(null)} onOpenStock={(sym) => setStockDetailSymbol(sym)} />
     </div>
   );
 }
@@ -4421,6 +4542,368 @@ function EconCalendarEditor({ calendar, setCalendar, onBack }) {
 // STOCK DETAIL MODAL — full fundamentals, earnings, revenue per ticker.
 // Opens when clicking any ticker symbol anywhere in the dashboard.
 // ============================================================
+// ============================================================
+// POINTEROS SIGNAL — rule-based dislocation scanner
+// Scans all sub-industry ETFs across two windows (30-day and YTD)
+// and flags the top 3 most-dislocated (laggards) and top 3 strongest (leaders).
+// Uses z-scores vs the universe mean for "dislocation."
+// This is a quantitative signal, not investment advice.
+// ============================================================
+function PointerOSSignal({ onOpenSector, onOpenStock }) {
+  const [scanResults, setScanResults] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const runScan = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      // For each sub-industry ETF, compute 30-day and YTD returns
+      const results = [];
+      for (const item of ALL_SUB_INDUSTRIES) {
+        try {
+          const [oneMo, ytd] = await Promise.all([
+            fetchYahoo(item.sym, "1mo", "1d").catch(() => null),
+            fetchYahoo(item.sym, "ytd", "1d").catch(() => null),
+          ]);
+          const ret = (data) => {
+            if (!data) return null;
+            const c = data.closes.filter(x => x !== null);
+            if (c.length < 2) return null;
+            return ((c[c.length - 1] - c[0]) / c[0]) * 100;
+          };
+          const m1 = ret(oneMo);
+          const yr = ret(ytd);
+          if (m1 != null || yr != null) {
+            results.push({ ...item, oneMonth: m1, ytd: yr });
+          }
+        } catch (e) { /* skip */ }
+      }
+
+      // Compute z-scores for 30-day window (the dislocation signal)
+      const validOneMo = results.filter(r => r.oneMonth != null).map(r => r.oneMonth);
+      const mean1m = validOneMo.reduce((s, v) => s + v, 0) / (validOneMo.length || 1);
+      const sd1m = Math.sqrt(validOneMo.reduce((s, v) => s + (v - mean1m) ** 2, 0) / (validOneMo.length || 1));
+      const enriched = results.map(r => ({
+        ...r,
+        z30: (r.oneMonth != null && sd1m > 0) ? (r.oneMonth - mean1m) / sd1m : null,
+      }));
+
+      // Top dislocations: lowest z-scores (negative). Top 3.
+      const dislocations = enriched
+        .filter(r => r.z30 != null)
+        .sort((a, b) => a.z30 - b.z30)
+        .slice(0, 3);
+      // Top momentum: highest z-scores. Top 3.
+      const leaders = enriched
+        .filter(r => r.z30 != null)
+        .sort((a, b) => b.z30 - a.z30)
+        .slice(0, 3);
+
+      setScanResults({
+        dislocations,
+        leaders,
+        universeMean: mean1m,
+        universeStdev: sd1m,
+        scannedAt: new Date(),
+      });
+    } catch (e) {
+      setError(e.message);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { runScan(); }, [runScan]);
+
+  const parentSectorName = (parentSym) => SECTOR_ETFS.find(s => s.sym === parentSym)?.name || parentSym;
+
+  // Format a row
+  const SignalRow = ({ item, type }) => {
+    const sector = SECTOR_ETFS.find(s => s.sym === item.parent);
+    const sign = item.oneMonth >= 0 ? "+" : "";
+    return (
+      <div style={{ padding: 12, background: COLORS.surface, borderRadius: 8, border: `1px solid ${COLORS.border}`, borderLeft: `4px solid ${type === "dislocation" ? COLORS.danger : COLORS.success}`, marginBottom: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+              <button onClick={() => onOpenStock && onOpenStock(item.sym)}
+                style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontWeight: 800, fontSize: 14, color: COLORS.primary, cursor: "pointer", textDecoration: "underline" }}>
+                {item.sym}
+              </button>
+              <span style={{ fontSize: 13, color: COLORS.text, fontWeight: 600 }}>{item.name}</span>
+            </div>
+            <div style={{ fontSize: 11, color: COLORS.textMuted }}>
+              Sector: <button onClick={() => sector && onOpenSector && onOpenSector(sector)}
+                style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontSize: 11, color: COLORS.primary, cursor: "pointer", textDecoration: "underline" }}>
+                {parentSectorName(item.parent)}
+              </button>
+            </div>
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600 }}>30-Day</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: item.oneMonth >= 0 ? COLORS.success : COLORS.danger }}>
+              {sign}{item.oneMonth?.toFixed(2)}%
+            </div>
+            <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 2 }}>
+              z-score: <b style={{ color: COLORS.text }}>{item.z30?.toFixed(2)}σ</b>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <Card style={{ padding: 18, marginBottom: 16, background: `linear-gradient(135deg, ${COLORS.bg} 0%, ${COLORS.surface} 100%)`, borderTop: `3px solid ${COLORS.gold}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: COLORS.gold }} />
+            <div style={{ fontSize: 11, color: COLORS.primary, textTransform: "uppercase", letterSpacing: 2, fontWeight: 700 }}>PointerOS Signal</div>
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>30-Day Dislocations & Momentum</div>
+          <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4, lineHeight: 1.5, maxWidth: 720 }}>
+            Quantitative scan across {ALL_SUB_INDUSTRIES.length} sub-industry ETFs. Z-scores measure how far each ETF's trailing 30-day return is from the universe mean. <b>Negative z = lagger / potential opportunity. Positive z = leader / momentum.</b> Not investment advice.
+          </div>
+        </div>
+        <Button size="sm" variant="ghost" onClick={runScan}>{loading ? "Scanning…" : "↻ Rescan"}</Button>
+      </div>
+
+      {error && (
+        <div style={{ padding: 10, background: COLORS.danger + "11", borderRadius: 6, fontSize: 12, color: COLORS.danger, marginBottom: 12 }}>
+          Scan failed: {error}
+        </div>
+      )}
+
+      {loading && !scanResults && (
+        <div style={{ padding: 30, textAlign: "center", color: COLORS.textMuted, fontSize: 13 }}>
+          Scanning {ALL_SUB_INDUSTRIES.length} sub-industries… This takes ~30 seconds on first load.
+        </div>
+      )}
+
+      {scanResults && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.danger, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>▼ Top 3 Dislocations</div>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, marginBottom: 8 }}>Most negative 30-day z-scores</div>
+              {scanResults.dislocations.length === 0 ? (
+                <div style={{ fontSize: 12, color: COLORS.textMuted, fontStyle: "italic" }}>No dislocations detected.</div>
+              ) : scanResults.dislocations.map(item => (
+                <SignalRow key={item.sym} item={item} type="dislocation" />
+              ))}
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.success, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>▲ Top 3 Momentum Leaders</div>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, marginBottom: 8 }}>Most positive 30-day z-scores</div>
+              {scanResults.leaders.length === 0 ? (
+                <div style={{ fontSize: 12, color: COLORS.textMuted, fontStyle: "italic" }}>No clear leaders detected.</div>
+              ) : scanResults.leaders.map(item => (
+                <SignalRow key={item.sym} item={item} type="leader" />
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 14, padding: 10, background: COLORS.surface, borderRadius: 6, fontSize: 11, color: COLORS.textDim, lineHeight: 1.5 }}>
+            Universe mean 30-day return: <b style={{ color: COLORS.text }}>{scanResults.universeMean.toFixed(2)}%</b> · σ: <b style={{ color: COLORS.text }}>{scanResults.universeStdev.toFixed(2)}%</b> · Scanned {scanResults.scannedAt.toLocaleTimeString()}. Click any ETF for fundamentals, or sector name to see sub-industries.
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+// ============================================================
+// SECTOR DETAIL MODAL — drill into a sector to see sub-industries
+// and top holdings. Triggered by clicking a sector tile.
+// ============================================================
+function SectorDetailModal({ sector, open, onClose, onOpenStock }) {
+  const [sectorReturns, setSectorReturns] = useState({});   // { ytd, oneMonth, threeMonth, oneYear, last, dailyPct }
+  const [subIndustryData, setSubIndustryData] = useState([]); // [{sym, name, ytd, oneMonth, oneYear, last}]
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const chartRef = useRef(null);
+  const chartObj = useRef(null);
+
+  useEffect(() => {
+    if (!open || !sector) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true); setError(null);
+      try {
+        // Sector ETF returns across windows
+        const windows = ["1mo", "3mo", "ytd", "1y"];
+        const [oneMo, threeMo, ytd, oneYr] = await Promise.all(
+          windows.map(w => fetchYahoo(sector.sym, w, "1d").catch(() => null))
+        );
+        const computeReturn = (data) => {
+          if (!data) return null;
+          const clean = data.closes.filter(c => c !== null);
+          if (clean.length < 2) return null;
+          return ((clean[clean.length - 1] - clean[0]) / clean[0]) * 100;
+        };
+        const sr = {
+          oneMonth: computeReturn(oneMo),
+          threeMonth: computeReturn(threeMo),
+          ytd: computeReturn(ytd),
+          oneYear: computeReturn(oneYr),
+          ytdData: ytd,
+        };
+        if (!cancelled) setSectorReturns(sr);
+
+        // Sub-industry ETFs in this sector
+        const subs = SUB_INDUSTRY_ETFS[sector.sym] || [];
+        const subResults = await Promise.all(subs.map(async (sub) => {
+          try {
+            const [yo, om] = await Promise.all([
+              fetchYahoo(sub.sym, "ytd", "1d").catch(() => null),
+              fetchYahoo(sub.sym, "1mo", "1d").catch(() => null),
+            ]);
+            const ytdPct = computeReturn(yo);
+            const oneMoPct = computeReturn(om);
+            const cleanYtd = yo ? yo.closes.filter(c => c !== null) : [];
+            const last = cleanYtd.length ? cleanYtd[cleanYtd.length - 1] : null;
+            return { ...sub, ytd: ytdPct, oneMonth: oneMoPct, last };
+          } catch (e) {
+            return { ...sub, ytd: null, oneMonth: null, last: null };
+          }
+        }));
+        if (!cancelled) setSubIndustryData(subResults.sort((a, b) => (b.ytd ?? -Infinity) - (a.ytd ?? -Infinity)));
+      } catch (e) {
+        if (!cancelled) setError(e.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, sector]);
+
+  // Sector ETF YTD chart
+  useEffect(() => {
+    if (!open || !chartRef.current || !sectorReturns.ytdData) return;
+    if (chartObj.current) { chartObj.current.destroy(); chartObj.current = null; }
+    const clean = sectorReturns.ytdData.closes.filter(c => c !== null);
+    const cleanTs = (sectorReturns.ytdData.ts || []).filter((_, i) => sectorReturns.ytdData.closes[i] !== null);
+    const start = clean[0];
+    const up = clean[clean.length - 1] >= start;
+    chartObj.current = new Chart(chartRef.current, {
+      type: "line",
+      data: {
+        labels: cleanTs.map(t => new Date(t * 1000).toLocaleDateString()),
+        datasets: [{
+          data: clean.map(c => ((c - start) / start) * 100),
+          borderColor: up ? COLORS.success : COLORS.danger,
+          backgroundColor: (up ? COLORS.success : COLORS.danger) + "15",
+          fill: true, pointRadius: 0, borderWidth: 2, tension: 0.2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: { y: { ticks: { callback: (v) => v.toFixed(1) + "%" } } },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => ctx.raw.toFixed(2) + "%" } } },
+      },
+    });
+    return () => { if (chartObj.current) chartObj.current.destroy(); };
+  }, [open, sectorReturns]);
+
+  if (!open || !sector) return null;
+  const heatColor = (pct) => {
+    if (pct == null) return "#9CA3AF";
+    if (pct >= 3) return "#0F766E";
+    if (pct >= 1) return "#1FB67D";
+    if (pct >= 0) return "#86EFAC";
+    if (pct >= -1) return "#FCA5A5";
+    if (pct >= -3) return "#DC2626";
+    return "#7F1D1D";
+  };
+  const fmtPct = (n) => n == null ? "—" : (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
+
+  return (
+    <Modal open={open} onClose={onClose} title={`${sector.name} (${sector.sym}) — Sector Detail`} wide={true}>
+      {/* Header with overview returns */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginBottom: 16 }}>
+        {[
+          ["YTD", sectorReturns.ytd],
+          ["1 Month", sectorReturns.oneMonth],
+          ["3 Months", sectorReturns.threeMonth],
+          ["1 Year", sectorReturns.oneYear],
+        ].map(([label, val]) => (
+          <div key={label} style={{ padding: 12, background: COLORS.bg, borderRadius: 8, borderLeft: `3px solid ${val == null ? COLORS.textMuted : (val >= 0 ? COLORS.success : COLORS.danger)}` }}>
+            <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>{label}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: val == null ? COLORS.textMuted : (val >= 0 ? COLORS.success : COLORS.danger), marginTop: 2 }}>
+              {fmtPct(val)}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* YTD chart */}
+      <Card style={{ padding: 14, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>YTD Price Path</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <a href={`https://finance.yahoo.com/quote/${sector.sym}/holdings`} target="_blank" rel="noopener" style={{ fontSize: 11, padding: "4px 10px", borderRadius: 4, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Holdings ↗</a>
+            <a href={`https://www.morningstar.com/etfs/arcx/${sector.sym.toLowerCase()}/portfolio`} target="_blank" rel="noopener" style={{ fontSize: 11, padding: "4px 10px", borderRadius: 4, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Morningstar ↗</a>
+          </div>
+        </div>
+        <div style={{ height: 180 }}><canvas ref={chartRef} /></div>
+      </Card>
+
+      {/* Sub-industries */}
+      <Card style={{ padding: 14, marginBottom: 16 }}>
+        <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, fontWeight: 600 }}>Sub-Industries in {sector.name}</div>
+        <div style={{ fontSize: 11, color: COLORS.textDim, marginBottom: 12 }}>
+          Click any ETF to drill in. Sorted by YTD return.
+        </div>
+        {loading && subIndustryData.length === 0 ? (
+          <div style={{ padding: 20, color: COLORS.textMuted, fontSize: 13, textAlign: "center" }}>Loading sub-industries…</div>
+        ) : subIndustryData.length === 0 ? (
+          <div style={{ padding: 20, color: COLORS.textMuted, fontSize: 13, textAlign: "center" }}>No sub-industries mapped for this sector.</div>
+        ) : (
+          <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+            <thead><tr style={{ background: COLORS.bg, textAlign: "left" }}>
+              <th style={{ padding: "8px 10px" }}>ETF</th>
+              <th style={{ padding: "8px 10px" }}>Industry</th>
+              <th style={{ padding: "8px 10px", textAlign: "right" }}>Last</th>
+              <th style={{ padding: "8px 10px", textAlign: "right" }}>1 Month</th>
+              <th style={{ padding: "8px 10px", textAlign: "right" }}>YTD</th>
+            </tr></thead>
+            <tbody>
+              {subIndustryData.map(sub => (
+                <tr key={sub.sym} style={{ borderTop: `1px solid ${COLORS.borderLight}` }}>
+                  <td style={{ padding: "8px 10px" }}>
+                    <button onClick={() => { onClose(); onOpenStock && onOpenStock(sub.sym); }}
+                      style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontWeight: 700, fontSize: 12, color: COLORS.primary, cursor: "pointer", textDecoration: "underline" }}>
+                      {sub.sym}
+                    </button>
+                  </td>
+                  <td style={{ padding: "8px 10px" }}>{sub.name}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", color: COLORS.textMuted }}>{sub.last != null ? "$" + sub.last.toFixed(2) : "—"}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right" }}>
+                    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, background: heatColor(sub.oneMonth), color: "white", fontWeight: 700, minWidth: 60, textAlign: "center" }}>{fmtPct(sub.oneMonth)}</span>
+                  </td>
+                  <td style={{ padding: "8px 10px", textAlign: "right" }}>
+                    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, background: heatColor(sub.ytd), color: "white", fontWeight: 700, minWidth: 60, textAlign: "center" }}>{fmtPct(sub.ytd)}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      {/* External links */}
+      <Card style={{ padding: 14, background: COLORS.bg }}>
+        <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>External Research</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <a href={`https://finance.yahoo.com/quote/${sector.sym}`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6, background: COLORS.surface, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Yahoo Finance · {sector.sym} ↗</a>
+          <a href={`https://www.morningstar.com/etfs/arcx/${sector.sym.toLowerCase()}/quote`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6, background: COLORS.surface, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Morningstar · {sector.sym} ↗</a>
+          <a href={`https://www.ssga.com/us/en/individual/etfs/the-${sector.name.toLowerCase().replace(/[^a-z]/g, "-")}-select-sector-spdr-fund-${sector.sym.toLowerCase()}`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6, background: COLORS.surface, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>SPDR Fact Sheet ↗</a>
+        </div>
+      </Card>
+    </Modal>
+  );
+}
+
 function StockDetailModal({ symbol, open, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -5001,22 +5484,60 @@ function MacroDashboard() {
         </Card>
       </div>
 
-      {/* FOMC + sentiment placeholder */}
-      <Card style={{ padding: 18, marginBottom: 16, background: COLORS.bg }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>FOMC — Next Meeting & Market Expectations</div>
-            <div style={{ fontSize: 11, color: COLORS.textMuted }}>Live probabilities from CME FedWatch (coming in a future build)</div>
-          </div>
-        </div>
-        <div style={{ fontSize: 13, color: COLORS.textMuted, lineHeight: 1.6 }}>
-          Live rate-decision probabilities are published by CME Group. The official tool is at the link below — opens in a new tab. (We'll integrate live FedWatch data here in a future build once we've validated the endpoint's stability.)
-        </div>
-        <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <a href="https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html" target="_blank" rel="noopener" style={{ fontSize: 12, padding: "8px 14px", borderRadius: 6, background: COLORS.primary, color: "white", textDecoration: "none", fontWeight: 600 }}>CME FedWatch Tool ↗</a>
-          <a href="https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm" target="_blank" rel="noopener" style={{ fontSize: 12, padding: "8px 14px", borderRadius: 6, background: COLORS.surface, color: COLORS.text, textDecoration: "none", fontWeight: 600, border: `1px solid ${COLORS.border}` }}>FOMC Calendar ↗</a>
-        </div>
-      </Card>
+      {/* FOMC — Next meeting + key resources */}
+      {(() => {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const upcoming = FOMC_SCHEDULE_2026.filter(m => new Date(m.date + "T00:00:00") >= today);
+        const next = upcoming[0] || null;
+        const nextDate = next ? new Date(next.date + "T00:00:00") : null;
+        const daysUntil = nextDate ? Math.ceil((nextDate - today) / (1000 * 60 * 60 * 24)) : null;
+        // The last completed meeting
+        const past = FOMC_SCHEDULE_2026.filter(m => new Date(m.date + "T00:00:00") < today);
+        const last = past[past.length - 1] || null;
+        return (
+          <Card style={{ padding: 18, marginBottom: 16, background: COLORS.bg, borderLeft: `4px solid ${COLORS.primaryDark}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 12 }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.text }}>FOMC — Next Meeting & Recent Decisions</div>
+                <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>Federal Open Market Committee · official Fed monetary policy meetings</div>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 14 }}>
+              {next && (
+                <div style={{ padding: 14, background: COLORS.surface, borderRadius: 8, borderTop: `3px solid ${COLORS.gold}` }}>
+                  <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Next Meeting</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: COLORS.text, marginTop: 4 }}>
+                    {nextDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </div>
+                  <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 4 }}>
+                    in {daysUntil} day{daysUntil === 1 ? "" : "s"} · {next.note}
+                  </div>
+                </div>
+              )}
+              {last && (
+                <div style={{ padding: 14, background: COLORS.surface, borderRadius: 8, borderTop: `3px solid ${COLORS.primary}` }}>
+                  <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Last Meeting</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: COLORS.text, marginTop: 4 }}>
+                    {new Date(last.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </div>
+                  <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 4 }}>{last.note}</div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 10, lineHeight: 1.5 }}>
+              For live rate-decision probabilities, the Fed's own statements/minutes, and the dot plot, use the official sources:
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <a href="https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html" target="_blank" rel="noopener" style={{ fontSize: 12, padding: "8px 14px", borderRadius: 6, background: COLORS.primary, color: "white", textDecoration: "none", fontWeight: 600 }}>CME FedWatch — Live Probabilities ↗</a>
+              <a href="https://www.federalreserve.gov/newsevents/pressreleases.htm" target="_blank" rel="noopener" style={{ fontSize: 12, padding: "8px 14px", borderRadius: 6, background: COLORS.surface, color: COLORS.text, textDecoration: "none", fontWeight: 600, border: `1px solid ${COLORS.border}` }}>Latest Statements ↗</a>
+              <a href="https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm" target="_blank" rel="noopener" style={{ fontSize: 12, padding: "8px 14px", borderRadius: 6, background: COLORS.surface, color: COLORS.text, textDecoration: "none", fontWeight: 600, border: `1px solid ${COLORS.border}` }}>FOMC Calendar ↗</a>
+              <a href="https://www.federalreserve.gov/monetarypolicy/fomcminutes.htm" target="_blank" rel="noopener" style={{ fontSize: 12, padding: "8px 14px", borderRadius: 6, background: COLORS.surface, color: COLORS.text, textDecoration: "none", fontWeight: 600, border: `1px solid ${COLORS.border}` }}>Minutes Archive ↗</a>
+            </div>
+          </Card>
+        );
+      })()}
 
       {/* Client-facing presentation links */}
       <Card style={{ padding: 18, borderLeft: `4px solid ${COLORS.primary}` }}>
