@@ -561,6 +561,70 @@ const URGENCY_COLORS = {
 // Used for direct deep links from any HR card that references handbook policy.
 const HANDBOOK_PATH = "docs/2025_Pointer_Employee_Handbook.pdf";
 
+// ============================================================
+// Morningstar URL helper.
+// ============================================================
+const MORNINGSTAR_OVERRIDES = {
+  XLK: "etfs/arcx/xlk", XLF: "etfs/arcx/xlf", XLV: "etfs/arcx/xlv", XLY: "etfs/arcx/xly",
+  XLC: "etfs/arcx/xlc", XLI: "etfs/arcx/xli", XLP: "etfs/arcx/xlp", XLE: "etfs/arcx/xle",
+  XLU: "etfs/arcx/xlu", XLRE: "etfs/arcx/xlre", XLB: "etfs/arcx/xlb",
+  SPY: "etfs/arcx/spy", QQQ: "etfs/xnas/qqq", DIA: "etfs/arcx/dia", IWM: "etfs/arcx/iwm",
+  VTI: "etfs/arcx/vti", VOO: "etfs/arcx/voo", VEA: "etfs/arcx/vea", VWO: "etfs/arcx/vwo",
+  AGG: "etfs/arcx/agg", BND: "etfs/xnas/bnd", TLT: "etfs/xnas/tlt", LQD: "etfs/arcx/lqd",
+  HYG: "etfs/arcx/hyg", GLD: "etfs/arcx/gld", SLV: "etfs/arcx/slv", USO: "etfs/arcx/uso",
+  EFA: "etfs/arcx/efa", EEM: "etfs/arcx/eem", ACWI: "etfs/xnas/acwi", VNQ: "etfs/arcx/vnq",
+  AAPL: "stocks/xnas/aapl", MSFT: "stocks/xnas/msft", GOOGL: "stocks/xnas/googl",
+  GOOG: "stocks/xnas/goog", AMZN: "stocks/xnas/amzn", META: "stocks/xnas/meta",
+  NVDA: "stocks/xnas/nvda", TSLA: "stocks/xnas/tsla", AVGO: "stocks/xnas/avgo",
+  NFLX: "stocks/xnas/nflx", AMD: "stocks/xnas/amd", INTC: "stocks/xnas/intc",
+  COST: "stocks/xnas/cost", PEP: "stocks/xnas/pep", CSCO: "stocks/xnas/csco",
+};
+
+function morningstarUrl(symbol) {
+  if (!symbol) return "https://www.morningstar.com/";
+  if (symbol.startsWith("^") || symbol.includes("=")) {
+    return `https://www.morningstar.com/search?query=${encodeURIComponent(symbol)}`;
+  }
+  const sym = symbol.toUpperCase();
+  const override = MORNINGSTAR_OVERRIDES[sym];
+  if (override) return `https://www.morningstar.com/${override}/quote`;
+  return `https://www.morningstar.com/search?query=${encodeURIComponent(sym)}`;
+}
+
+// Ticker action — symbol + two affordances:
+//   📊 → opens in-app detail modal via onOpenDetail (or sector breakdown if sectorObj passed)
+//   ↗  → opens Morningstar page in a new tab
+function TickerAction({ symbol, onOpenDetail, style, sectorObj, onOpenSector }) {
+  if (!symbol) return null;
+  const isCash = symbol.startsWith("$") || symbol === "CASH";
+  if (isCash) return <span style={{ fontWeight: 700, color: "#4F6480", ...style }}>{symbol}</span>;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, ...style }}>
+      <span style={{ fontWeight: 700, color: "#0B2853" }}>{symbol}</span>
+      {sectorObj && onOpenSector && (
+        <button onClick={(e) => { e.stopPropagation(); onOpenSector(sectorObj); }}
+          title="View sector breakdown in PointerOS"
+          style={{ background: "none", border: "none", padding: "0 2px", cursor: "pointer", fontSize: 12, lineHeight: 1, color: "#2FACEA" }}>
+          📊
+        </button>
+      )}
+      {!sectorObj && onOpenDetail && (
+        <button onClick={(e) => { e.stopPropagation(); onOpenDetail(symbol); }}
+          title="View in PointerOS"
+          style={{ background: "none", border: "none", padding: "0 2px", cursor: "pointer", fontSize: 12, lineHeight: 1, color: "#2FACEA" }}>
+          📊
+        </button>
+      )}
+      <a href={morningstarUrl(symbol)} target="_blank" rel="noopener"
+         title="Open in Morningstar"
+         onClick={(e) => e.stopPropagation()}
+         style={{ padding: "0 2px", cursor: "pointer", fontSize: 11, lineHeight: 1, color: "#2FACEA", textDecoration: "none", fontWeight: 700 }}>
+        ↗
+      </a>
+    </span>
+  );
+}
+
 // Inline handbook reference link. Renders as a small "Handbook: <topic> →" link
 // that opens the PDF in a new tab. The topic prop describes exactly which
 // section/part the policy lives in so users know where to look.
@@ -3233,6 +3297,9 @@ async function fetchFearGreed() {
     const data = await fetchThroughProxies(url, { expectJSON: true });
     const fg = data.fear_and_greed;
     if (!fg) return null;
+    // Historical series — CNN returns the rolling 1-year series in the same payload
+    // under "fear_and_greed_historical.data" (array of {x: timestamp_ms, y: score, rating})
+    const hist = data?.fear_and_greed_historical?.data || [];
     return {
       score: Math.round(fg.score),
       rating: fg.rating,
@@ -3241,6 +3308,7 @@ async function fetchFearGreed() {
       previousMonth: Math.round(fg.previous_1_month),
       previousYear: Math.round(fg.previous_1_year),
       timestamp: fg.timestamp,
+      historical: hist.map(d => ({ ts: d.x, score: d.y, rating: d.rating })),
     };
   } catch (e) {
     console.warn("Fear & Greed fetch failed:", e.message);
@@ -3974,7 +4042,7 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
                       {moversData.gainers.map((m, i) => (
                         <tr key={m.sym} style={{ borderTop: i === 0 ? "none" : `1px solid ${COLORS.borderLight}` }}>
                           <td style={{ padding: "6px 0", fontWeight: 600 }}>
-                            <button onClick={() => setStockDetailSymbol(m.sym)} style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontWeight: 600, fontSize: 13, color: COLORS.primary, cursor: "pointer", textDecoration: "underline" }}>{m.sym}</button>
+                            <TickerAction symbol={m.sym} onOpenDetail={setStockDetailSymbol} />
                           </td>
                           <td style={{ padding: "6px 0", color: COLORS.textMuted }}>{m.name}</td>
                           <td style={{ padding: "6px 0", textAlign: "right" }}>${m.last.toFixed(2)}</td>
@@ -3993,7 +4061,7 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
                       {moversData.losers.map((m, i) => (
                         <tr key={m.sym} style={{ borderTop: i === 0 ? "none" : `1px solid ${COLORS.borderLight}` }}>
                           <td style={{ padding: "6px 0", fontWeight: 600 }}>
-                            <button onClick={() => setStockDetailSymbol(m.sym)} style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontWeight: 600, fontSize: 13, color: COLORS.primary, cursor: "pointer", textDecoration: "underline" }}>{m.sym}</button>
+                            <TickerAction symbol={m.sym} onOpenDetail={setStockDetailSymbol} />
                           </td>
                           <td style={{ padding: "6px 0", color: COLORS.textMuted }}>{m.name}</td>
                           <td style={{ padding: "6px 0", textAlign: "right" }}>${m.last.toFixed(2)}</td>
@@ -4215,6 +4283,61 @@ function FearGreedCard({ data }) {
   };
   const score = data?.score;
   const angle = score != null ? -90 + (score / 100) * 180 : -90;
+
+  // Historical chart
+  const histCanvasRef = useRef(null);
+  const histChartRef = useRef(null);
+  useEffect(() => {
+    if (!data?.historical?.length || !histCanvasRef.current) return;
+    if (histChartRef.current) { histChartRef.current.destroy(); histChartRef.current = null; }
+    const hist = data.historical;
+    // Take last ~365 days
+    const oneYearMs = 365 * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - oneYearMs;
+    const recent = hist.filter(h => h.ts >= cutoff);
+    histChartRef.current = new Chart(histCanvasRef.current, {
+      type: "line",
+      data: {
+        labels: recent.map(h => new Date(h.ts).toLocaleDateString()),
+        datasets: [{
+          label: "F&G Score",
+          data: recent.map(h => h.score),
+          borderColor: "#D97706",
+          backgroundColor: "rgba(217,119,6,0.1)",
+          fill: true,
+          pointRadius: 0,
+          borderWidth: 1.5,
+          tension: 0.2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          y: { min: 0, max: 100, ticks: { stepSize: 25 } },
+          x: { ticks: { maxTicksLimit: 6 } },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const score = ctx.raw;
+                let rating = "Neutral";
+                if (score <= 25) rating = "Extreme Fear";
+                else if (score <= 45) rating = "Fear";
+                else if (score <= 55) rating = "Neutral";
+                else if (score <= 75) rating = "Greed";
+                else rating = "Extreme Greed";
+                return [`Score: ${score}`, rating];
+              },
+            },
+          },
+        },
+      },
+    });
+    return () => { if (histChartRef.current) histChartRef.current.destroy(); };
+  }, [data]);
+
   return (
     <Card style={{ padding: 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -4226,40 +4349,49 @@ function FearGreedCard({ data }) {
           Loading… <div style={{ fontSize: 11, marginTop: 6, color: COLORS.textDim }}>If this stays empty, the data source may be temporarily unreachable.</div>
         </div>
       ) : (
-        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-          {/* Half-circle gauge */}
-          <div style={{ position: "relative", width: 160, height: 90, flexShrink: 0 }}>
-            <svg width="160" height="90" viewBox="0 0 160 90">
-              <defs>
-                <linearGradient id="fgGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#991B1B" />
-                  <stop offset="30%" stopColor="#DC2626" />
-                  <stop offset="50%" stopColor="#D97706" />
-                  <stop offset="70%" stopColor="#16A34A" />
-                  <stop offset="100%" stopColor="#15803D" />
-                </linearGradient>
-              </defs>
-              <path d="M 15 85 A 65 65 0 0 1 145 85" fill="none" stroke="url(#fgGrad)" strokeWidth="14" strokeLinecap="round" />
-              {/* Needle */}
-              <g transform={`translate(80,85) rotate(${angle})`}>
-                <line x1="0" y1="0" x2="0" y2="-58" stroke={COLORS.text} strokeWidth="3" strokeLinecap="round" />
-                <circle cx="0" cy="0" r="5" fill={COLORS.text} />
-              </g>
-            </svg>
-            <div style={{ position: "absolute", left: 0, right: 0, top: 30, textAlign: "center" }}>
-              <div style={{ fontSize: 28, fontWeight: 800, color: ratingColor(data.rating), lineHeight: 1 }}>{score}</div>
+        <>
+          <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 14 }}>
+            {/* Half-circle gauge */}
+            <div style={{ position: "relative", width: 160, height: 90, flexShrink: 0 }}>
+              <svg width="160" height="90" viewBox="0 0 160 90">
+                <defs>
+                  <linearGradient id="fgGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#991B1B" />
+                    <stop offset="30%" stopColor="#DC2626" />
+                    <stop offset="50%" stopColor="#D97706" />
+                    <stop offset="70%" stopColor="#16A34A" />
+                    <stop offset="100%" stopColor="#15803D" />
+                  </linearGradient>
+                </defs>
+                <path d="M 15 85 A 65 65 0 0 1 145 85" fill="none" stroke="url(#fgGrad)" strokeWidth="14" strokeLinecap="round" />
+                {/* Needle */}
+                <g transform={`translate(80,85) rotate(${angle})`}>
+                  <line x1="0" y1="0" x2="0" y2="-58" stroke={COLORS.text} strokeWidth="3" strokeLinecap="round" />
+                  <circle cx="0" cy="0" r="5" fill={COLORS.text} />
+                </g>
+              </svg>
+              <div style={{ position: "absolute", left: 0, right: 0, top: 30, textAlign: "center" }}>
+                <div style={{ fontSize: 28, fontWeight: 800, color: ratingColor(data.rating), lineHeight: 1 }}>{score}</div>
+              </div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: ratingColor(data.rating), textTransform: "capitalize", marginBottom: 8 }}>{data.rating}</div>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, lineHeight: 1.6 }}>
+                <div>Prev close: <b style={{ color: COLORS.text }}>{data.previousClose}</b></div>
+                <div>1 week ago: <b style={{ color: COLORS.text }}>{data.previousWeek}</b></div>
+                <div>1 month ago: <b style={{ color: COLORS.text }}>{data.previousMonth}</b></div>
+                <div>1 year ago: <b style={{ color: COLORS.text }}>{data.previousYear}</b></div>
+              </div>
             </div>
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: ratingColor(data.rating), textTransform: "capitalize", marginBottom: 8 }}>{data.rating}</div>
-            <div style={{ fontSize: 11, color: COLORS.textMuted, lineHeight: 1.6 }}>
-              <div>Prev close: <b style={{ color: COLORS.text }}>{data.previousClose}</b></div>
-              <div>1 week ago: <b style={{ color: COLORS.text }}>{data.previousWeek}</b></div>
-              <div>1 month ago: <b style={{ color: COLORS.text }}>{data.previousMonth}</b></div>
-              <div>1 year ago: <b style={{ color: COLORS.text }}>{data.previousYear}</b></div>
+          {/* 1Y rolling chart */}
+          {data.historical && data.historical.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>1-Year History</div>
+              <div style={{ height: 100 }}><canvas ref={histCanvasRef} /></div>
             </div>
-          </div>
-        </div>
+          )}
+        </>
       )}
     </Card>
   );
@@ -4385,10 +4517,7 @@ function ModelHoldingRow({ symbol, targetPct, modelName, morningstarRating, canE
               <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 2 }}>Cash sleeve</div>
             </>
           ) : (
-            <button onClick={() => onOpenDetail && onOpenDetail(symbol)}
-              style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontWeight: 700, fontSize: 14, color: COLORS.primary, cursor: "pointer", textDecoration: "underline", textAlign: "left" }}>
-              {symbol}
-            </button>
+            <TickerAction symbol={symbol} onOpenDetail={onOpenDetail} style={{ fontSize: 14 }} />
           )}
         </div>
         {/* Target % */}
@@ -4557,53 +4686,61 @@ function PointerOSSignal({ onOpenSector, onOpenStock }) {
   const runScan = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      // For each sub-industry ETF, compute 30-day and YTD returns
+      // For each sub-industry ETF, compute 60-day and YTD returns.
+      // 60-day = ~3-month range from Yahoo (close enough to 60 trading days).
       const results = [];
       for (const item of ALL_SUB_INDUSTRIES) {
         try {
-          const [oneMo, ytd] = await Promise.all([
-            fetchYahoo(item.sym, "1mo", "1d").catch(() => null),
+          const [sixtyDay, ytd] = await Promise.all([
+            fetchYahoo(item.sym, "3mo", "1d").catch(() => null),
             fetchYahoo(item.sym, "ytd", "1d").catch(() => null),
           ]);
+          // Pull last 60 trading days from the 3mo window
+          const sixtyDayReturn = (() => {
+            if (!sixtyDay) return null;
+            const c = sixtyDay.closes.filter(x => x !== null);
+            if (c.length < 2) return null;
+            // Use trailing 60 trading days if we have them, else whatever we have
+            const start = c.length > 60 ? c[c.length - 60] : c[0];
+            return ((c[c.length - 1] - start) / start) * 100;
+          })();
           const ret = (data) => {
             if (!data) return null;
             const c = data.closes.filter(x => x !== null);
             if (c.length < 2) return null;
             return ((c[c.length - 1] - c[0]) / c[0]) * 100;
           };
-          const m1 = ret(oneMo);
           const yr = ret(ytd);
-          if (m1 != null || yr != null) {
-            results.push({ ...item, oneMonth: m1, ytd: yr });
+          if (sixtyDayReturn != null || yr != null) {
+            results.push({ ...item, sixtyDay: sixtyDayReturn, ytd: yr });
           }
         } catch (e) { /* skip */ }
       }
 
-      // Compute z-scores for 30-day window (the dislocation signal)
-      const validOneMo = results.filter(r => r.oneMonth != null).map(r => r.oneMonth);
-      const mean1m = validOneMo.reduce((s, v) => s + v, 0) / (validOneMo.length || 1);
-      const sd1m = Math.sqrt(validOneMo.reduce((s, v) => s + (v - mean1m) ** 2, 0) / (validOneMo.length || 1));
+      // Compute z-scores for 60-day window (the dislocation signal)
+      const valid60 = results.filter(r => r.sixtyDay != null).map(r => r.sixtyDay);
+      const mean60 = valid60.reduce((s, v) => s + v, 0) / (valid60.length || 1);
+      const sd60 = Math.sqrt(valid60.reduce((s, v) => s + (v - mean60) ** 2, 0) / (valid60.length || 1));
       const enriched = results.map(r => ({
         ...r,
-        z30: (r.oneMonth != null && sd1m > 0) ? (r.oneMonth - mean1m) / sd1m : null,
+        z60: (r.sixtyDay != null && sd60 > 0) ? (r.sixtyDay - mean60) / sd60 : null,
       }));
 
-      // Top dislocations: lowest z-scores (negative). Top 3.
+      // Top 5 dislocations (most negative z) and top 5 leaders (most positive z)
       const dislocations = enriched
-        .filter(r => r.z30 != null)
-        .sort((a, b) => a.z30 - b.z30)
-        .slice(0, 3);
-      // Top momentum: highest z-scores. Top 3.
+        .filter(r => r.z60 != null)
+        .sort((a, b) => a.z60 - b.z60)
+        .slice(0, 5);
       const leaders = enriched
-        .filter(r => r.z30 != null)
-        .sort((a, b) => b.z30 - a.z30)
-        .slice(0, 3);
+        .filter(r => r.z60 != null)
+        .sort((a, b) => b.z60 - a.z60)
+        .slice(0, 5);
 
       setScanResults({
         dislocations,
         leaders,
-        universeMean: mean1m,
-        universeStdev: sd1m,
+        universeMean: mean60,
+        universeStdev: sd60,
         scannedAt: new Date(),
       });
     } catch (e) {
@@ -4619,16 +4756,13 @@ function PointerOSSignal({ onOpenSector, onOpenStock }) {
   // Format a row
   const SignalRow = ({ item, type }) => {
     const sector = SECTOR_ETFS.find(s => s.sym === item.parent);
-    const sign = item.oneMonth >= 0 ? "+" : "";
+    const sign = item.sixtyDay >= 0 ? "+" : "";
     return (
       <div style={{ padding: 12, background: COLORS.surface, borderRadius: 8, border: `1px solid ${COLORS.border}`, borderLeft: `4px solid ${type === "dislocation" ? COLORS.danger : COLORS.success}`, marginBottom: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-              <button onClick={() => onOpenStock && onOpenStock(item.sym)}
-                style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontWeight: 800, fontSize: 14, color: COLORS.primary, cursor: "pointer", textDecoration: "underline" }}>
-                {item.sym}
-              </button>
+              <TickerAction symbol={item.sym} onOpenDetail={onOpenStock} style={{ fontSize: 14 }} />
               <span style={{ fontSize: 13, color: COLORS.text, fontWeight: 600 }}>{item.name}</span>
             </div>
             <div style={{ fontSize: 11, color: COLORS.textMuted }}>
@@ -4639,12 +4773,12 @@ function PointerOSSignal({ onOpenSector, onOpenStock }) {
             </div>
           </div>
           <div style={{ textAlign: "right", flexShrink: 0 }}>
-            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600 }}>30-Day</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: item.oneMonth >= 0 ? COLORS.success : COLORS.danger }}>
-              {sign}{item.oneMonth?.toFixed(2)}%
+            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600 }}>60-Day</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: item.sixtyDay >= 0 ? COLORS.success : COLORS.danger }}>
+              {sign}{item.sixtyDay?.toFixed(2)}%
             </div>
             <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 2 }}>
-              z-score: <b style={{ color: COLORS.text }}>{item.z30?.toFixed(2)}σ</b>
+              z-score: <b style={{ color: COLORS.text }}>{item.z60?.toFixed(2)}σ</b>
             </div>
           </div>
         </div>
@@ -4660,9 +4794,9 @@ function PointerOSSignal({ onOpenSector, onOpenStock }) {
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: COLORS.gold }} />
             <div style={{ fontSize: 11, color: COLORS.primary, textTransform: "uppercase", letterSpacing: 2, fontWeight: 700 }}>PointerOS Signal</div>
           </div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>30-Day Dislocations & Momentum</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>60-Day Dislocations & Momentum</div>
           <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4, lineHeight: 1.5, maxWidth: 720 }}>
-            Quantitative scan across {ALL_SUB_INDUSTRIES.length} sub-industry ETFs. Z-scores measure how far each ETF's trailing 30-day return is from the universe mean. <b>Negative z = lagger / potential opportunity. Positive z = leader / momentum.</b> Not investment advice.
+            Quantitative scan across {ALL_SUB_INDUSTRIES.length} sub-industry ETFs. Z-scores measure how far each ETF's trailing 60-day return is from the universe mean. <b>Negative z = laggard / potential opportunity. Positive z = leader / momentum.</b> Not investment advice.
           </div>
         </div>
         <Button size="sm" variant="ghost" onClick={runScan}>{loading ? "Scanning…" : "↻ Rescan"}</Button>
@@ -4676,7 +4810,7 @@ function PointerOSSignal({ onOpenSector, onOpenStock }) {
 
       {loading && !scanResults && (
         <div style={{ padding: 30, textAlign: "center", color: COLORS.textMuted, fontSize: 13 }}>
-          Scanning {ALL_SUB_INDUSTRIES.length} sub-industries… This takes ~30 seconds on first load.
+          Scanning {ALL_SUB_INDUSTRIES.length} sub-industries… This takes ~60 seconds on first load.
         </div>
       )}
 
@@ -4684,8 +4818,8 @@ function PointerOSSignal({ onOpenSector, onOpenStock }) {
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.danger, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>▼ Top 3 Dislocations</div>
-              <div style={{ fontSize: 10, color: COLORS.textMuted, marginBottom: 8 }}>Most negative 30-day z-scores</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.danger, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>▼ Top 5 Dislocations</div>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, marginBottom: 8 }}>Most negative 60-day z-scores</div>
               {scanResults.dislocations.length === 0 ? (
                 <div style={{ fontSize: 12, color: COLORS.textMuted, fontStyle: "italic" }}>No dislocations detected.</div>
               ) : scanResults.dislocations.map(item => (
@@ -4693,8 +4827,8 @@ function PointerOSSignal({ onOpenSector, onOpenStock }) {
               ))}
             </div>
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.success, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>▲ Top 3 Momentum Leaders</div>
-              <div style={{ fontSize: 10, color: COLORS.textMuted, marginBottom: 8 }}>Most positive 30-day z-scores</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.success, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>▲ Top 5 Momentum Leaders</div>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, marginBottom: 8 }}>Most positive 60-day z-scores</div>
               {scanResults.leaders.length === 0 ? (
                 <div style={{ fontSize: 12, color: COLORS.textMuted, fontStyle: "italic" }}>No clear leaders detected.</div>
               ) : scanResults.leaders.map(item => (
@@ -4704,7 +4838,7 @@ function PointerOSSignal({ onOpenSector, onOpenStock }) {
           </div>
 
           <div style={{ marginTop: 14, padding: 10, background: COLORS.surface, borderRadius: 6, fontSize: 11, color: COLORS.textDim, lineHeight: 1.5 }}>
-            Universe mean 30-day return: <b style={{ color: COLORS.text }}>{scanResults.universeMean.toFixed(2)}%</b> · σ: <b style={{ color: COLORS.text }}>{scanResults.universeStdev.toFixed(2)}%</b> · Scanned {scanResults.scannedAt.toLocaleTimeString()}. Click any ETF for fundamentals, or sector name to see sub-industries.
+            Universe mean 60-day return: <b style={{ color: COLORS.text }}>{scanResults.universeMean.toFixed(2)}%</b> · σ: <b style={{ color: COLORS.text }}>{scanResults.universeStdev.toFixed(2)}%</b> · Scanned {scanResults.scannedAt.toLocaleTimeString()}. Click 📊 for in-app fundamentals or ↗ for Morningstar.
           </div>
         </>
       )}
@@ -4717,12 +4851,20 @@ function PointerOSSignal({ onOpenSector, onOpenStock }) {
 // and top holdings. Triggered by clicking a sector tile.
 // ============================================================
 function SectorDetailModal({ sector, open, onClose, onOpenStock }) {
-  const [sectorReturns, setSectorReturns] = useState({});   // { ytd, oneMonth, threeMonth, oneYear, last, dailyPct }
-  const [subIndustryData, setSubIndustryData] = useState([]); // [{sym, name, ytd, oneMonth, oneYear, last}]
+  const [sectorReturns, setSectorReturns] = useState({});
+  const [subIndustryData, setSubIndustryData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const chartRef = useRef(null);
   const chartObj = useRef(null);
+
+  // Helper: compute return between two indices in a closes array.
+  // tradingDaysBack=null means "all of it" (from index 0).
+  const computeReturnFromCloses = (closes, tradingDaysBack) => {
+    if (!closes || closes.length < 2) return null;
+    const start = tradingDaysBack && closes.length > tradingDaysBack ? closes[closes.length - tradingDaysBack] : closes[0];
+    return ((closes[closes.length - 1] - start) / start) * 100;
+  };
 
   useEffect(() => {
     if (!open || !sector) return;
@@ -4730,41 +4872,70 @@ function SectorDetailModal({ sector, open, onClose, onOpenStock }) {
     (async () => {
       setLoading(true); setError(null);
       try {
-        // Sector ETF returns across windows
-        const windows = ["1mo", "3mo", "ytd", "1y"];
-        const [oneMo, threeMo, ytd, oneYr] = await Promise.all(
-          windows.map(w => fetchYahoo(sector.sym, w, "1d").catch(() => null))
-        );
-        const computeReturn = (data) => {
-          if (!data) return null;
-          const clean = data.closes.filter(c => c !== null);
-          if (clean.length < 2) return null;
-          return ((clean[clean.length - 1] - clean[0]) / clean[0]) * 100;
-        };
-        const sr = {
-          oneMonth: computeReturn(oneMo),
-          threeMonth: computeReturn(threeMo),
-          ytd: computeReturn(ytd),
-          oneYear: computeReturn(oneYr),
+        // Pull broader windows so we can derive everything we need:
+        //  - 3mo for 1mo / 60d / 90d
+        //  - ytd for the YTD highlight band
+        //  - 1y for the main chart + 1Y return + 52W high/low
+        //  - 5y for the rolling 3Y return
+        const [threeMo, ytd, oneYr, fiveYr] = await Promise.all([
+          fetchYahoo(sector.sym, "3mo", "1d").catch(() => null),
+          fetchYahoo(sector.sym, "ytd", "1d").catch(() => null),
+          fetchYahoo(sector.sym, "1y", "1d").catch(() => null),
+          fetchYahoo(sector.sym, "5y", "1wk").catch(() => null),
+        ]);
+        const clean = (data) => data ? data.closes.filter(c => c !== null) : [];
+        const threeMoClean = clean(threeMo);
+        const ytdClean = clean(ytd);
+        const oneYrClean = clean(oneYr);
+        const fiveYrClean = clean(fiveYr);
+
+        // 60d ≈ 60 trading days; 90d ≈ 90 trading days
+        const oneMonth = computeReturnFromCloses(threeMoClean, 21);    // ~1 month of trading days
+        const sixtyDay = computeReturnFromCloses(threeMoClean, 60);
+        const ninetyDay = computeReturnFromCloses(threeMoClean, null); // full 3mo window ~ 90 days
+        const ytdRet = computeReturnFromCloses(ytdClean, null);
+        const oneYearRet = computeReturnFromCloses(oneYrClean, null);
+        // Rolling 3Y: take 5Y weekly data, use last ~156 weeks
+        const threeYearRet = (() => {
+          if (fiveYrClean.length < 2) return null;
+          const start = fiveYrClean.length > 156 ? fiveYrClean[fiveYrClean.length - 156] : fiveYrClean[0];
+          return ((fiveYrClean[fiveYrClean.length - 1] - start) / start) * 100;
+        })();
+        const oneYearHigh = oneYrClean.length ? Math.max(...oneYrClean) : null;
+        const oneYearLow = oneYrClean.length ? Math.min(...oneYrClean) : null;
+        const last = oneYrClean.length ? oneYrClean[oneYrClean.length - 1] : null;
+
+        if (!cancelled) setSectorReturns({
+          oneMonth, sixtyDay, ninetyDay, ytd: ytdRet, oneYear: oneYearRet, threeYear: threeYearRet,
+          oneYearHigh, oneYearLow, last,
+          oneYearData: oneYr,
           ytdData: ytd,
-        };
-        if (!cancelled) setSectorReturns(sr);
+        });
 
         // Sub-industry ETFs in this sector
         const subs = SUB_INDUSTRY_ETFS[sector.sym] || [];
         const subResults = await Promise.all(subs.map(async (sub) => {
           try {
-            const [yo, om] = await Promise.all([
+            const [s3mo, sYtd, s1y] = await Promise.all([
+              fetchYahoo(sub.sym, "3mo", "1d").catch(() => null),
               fetchYahoo(sub.sym, "ytd", "1d").catch(() => null),
-              fetchYahoo(sub.sym, "1mo", "1d").catch(() => null),
+              fetchYahoo(sub.sym, "1y", "1d").catch(() => null),
             ]);
-            const ytdPct = computeReturn(yo);
-            const oneMoPct = computeReturn(om);
-            const cleanYtd = yo ? yo.closes.filter(c => c !== null) : [];
-            const last = cleanYtd.length ? cleanYtd[cleanYtd.length - 1] : null;
-            return { ...sub, ytd: ytdPct, oneMonth: oneMoPct, last };
+            const c3 = clean(s3mo);
+            const cY = clean(sYtd);
+            const c1y = clean(s1y);
+            return {
+              ...sub,
+              oneMonth: computeReturnFromCloses(c3, 21),
+              sixtyDay: computeReturnFromCloses(c3, 60),
+              ninetyDay: computeReturnFromCloses(c3, null),
+              ytd: computeReturnFromCloses(cY, null),
+              oneYear: computeReturnFromCloses(c1y, null),
+              oneYearHigh: c1y.length ? Math.max(...c1y) : null,
+              last: c1y.length ? c1y[c1y.length - 1] : (cY.length ? cY[cY.length - 1] : null),
+            };
           } catch (e) {
-            return { ...sub, ytd: null, oneMonth: null, last: null };
+            return { ...sub, oneMonth: null, sixtyDay: null, ninetyDay: null, ytd: null, oneYear: null, oneYearHigh: null, last: null };
           }
         }));
         if (!cancelled) setSubIndustryData(subResults.sort((a, b) => (b.ytd ?? -Infinity) - (a.ytd ?? -Infinity)));
@@ -4777,29 +4948,61 @@ function SectorDetailModal({ sector, open, onClose, onOpenStock }) {
     return () => { cancelled = true; };
   }, [open, sector]);
 
-  // Sector ETF YTD chart
+  // Rolling 1Y chart with 52W high/low markers and YTD shaded band
   useEffect(() => {
-    if (!open || !chartRef.current || !sectorReturns.ytdData) return;
+    if (!open || !chartRef.current || !sectorReturns.oneYearData) return;
     if (chartObj.current) { chartObj.current.destroy(); chartObj.current = null; }
-    const clean = sectorReturns.ytdData.closes.filter(c => c !== null);
-    const cleanTs = (sectorReturns.ytdData.ts || []).filter((_, i) => sectorReturns.ytdData.closes[i] !== null);
-    const start = clean[0];
-    const up = clean[clean.length - 1] >= start;
+    const data = sectorReturns.oneYearData;
+    const cleanCloses = data.closes.filter(c => c !== null);
+    const cleanTs = (data.ts || []).filter((_, i) => data.closes[i] !== null);
+    const labels = cleanTs.map(t => new Date(t * 1000));
+
+    // Find indices of 52W high and low
+    const hiIdx = cleanCloses.indexOf(Math.max(...cleanCloses));
+    const loIdx = cleanCloses.indexOf(Math.min(...cleanCloses));
+
+    // Find Jan 1 index for YTD band start
+    const yearStart = new Date(new Date().getFullYear(), 0, 1);
+    let ytdStartIdx = labels.findIndex(d => d >= yearStart);
+    if (ytdStartIdx < 0) ytdStartIdx = 0;
+
+    const up = cleanCloses[cleanCloses.length - 1] >= cleanCloses[0];
     chartObj.current = new Chart(chartRef.current, {
       type: "line",
       data: {
-        labels: cleanTs.map(t => new Date(t * 1000).toLocaleDateString()),
+        labels: labels.map(d => d.toLocaleDateString()),
         datasets: [{
-          data: clean.map(c => ((c - start) / start) * 100),
+          label: sector.sym,
+          data: cleanCloses,
           borderColor: up ? COLORS.success : COLORS.danger,
           backgroundColor: (up ? COLORS.success : COLORS.danger) + "15",
           fill: true, pointRadius: 0, borderWidth: 2, tension: 0.2,
+          // Highlight 52W high/low and Jan 1 with bigger points
+          pointRadius: cleanCloses.map((_, i) => (i === hiIdx || i === loIdx || i === ytdStartIdx) ? 5 : 0),
+          pointBackgroundColor: cleanCloses.map((_, i) => i === hiIdx ? COLORS.success : i === loIdx ? COLORS.danger : i === ytdStartIdx ? COLORS.gold : "transparent"),
+          pointBorderColor: cleanCloses.map((_, i) => i === hiIdx ? COLORS.success : i === loIdx ? COLORS.danger : i === ytdStartIdx ? COLORS.gold : "transparent"),
         }],
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        scales: { y: { ticks: { callback: (v) => v.toFixed(1) + "%" } } },
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => ctx.raw.toFixed(2) + "%" } } },
+        scales: {
+          y: { ticks: { callback: (v) => "$" + v.toFixed(0) } },
+          x: { ticks: { maxTicksLimit: 8 } },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const lines = ["$" + ctx.raw.toFixed(2)];
+                if (ctx.dataIndex === hiIdx) lines.push("🟢 52-Week High");
+                if (ctx.dataIndex === loIdx) lines.push("🔴 52-Week Low");
+                if (ctx.dataIndex === ytdStartIdx) lines.push("📅 Jan 1 (YTD start)");
+                return lines;
+              },
+            },
+          },
+        },
       },
     });
     return () => { if (chartObj.current) chartObj.current.destroy(); };
@@ -4819,75 +5022,101 @@ function SectorDetailModal({ sector, open, onClose, onOpenStock }) {
 
   return (
     <Modal open={open} onClose={onClose} title={`${sector.name} (${sector.sym}) — Sector Detail`} wide={true}>
-      {/* Header with overview returns */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginBottom: 16 }}>
+      {/* Header with overview returns — 7 windows */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginBottom: 16 }}>
         {[
-          ["YTD", sectorReturns.ytd],
           ["1 Month", sectorReturns.oneMonth],
-          ["3 Months", sectorReturns.threeMonth],
+          ["60 Day", sectorReturns.sixtyDay],
+          ["90 Day", sectorReturns.ninetyDay],
+          ["YTD", sectorReturns.ytd],
           ["1 Year", sectorReturns.oneYear],
+          ["3 Year", sectorReturns.threeYear],
         ].map(([label, val]) => (
-          <div key={label} style={{ padding: 12, background: COLORS.bg, borderRadius: 8, borderLeft: `3px solid ${val == null ? COLORS.textMuted : (val >= 0 ? COLORS.success : COLORS.danger)}` }}>
+          <div key={label} style={{ padding: 10, background: COLORS.bg, borderRadius: 8, borderLeft: `3px solid ${val == null ? COLORS.textMuted : (val >= 0 ? COLORS.success : COLORS.danger)}` }}>
             <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>{label}</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: val == null ? COLORS.textMuted : (val >= 0 ? COLORS.success : COLORS.danger), marginTop: 2 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: val == null ? COLORS.textMuted : (val >= 0 ? COLORS.success : COLORS.danger), marginTop: 2 }}>
               {fmtPct(val)}
             </div>
           </div>
         ))}
-      </div>
-
-      {/* YTD chart */}
-      <Card style={{ padding: 14, marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>YTD Price Path</div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <a href={`https://finance.yahoo.com/quote/${sector.sym}/holdings`} target="_blank" rel="noopener" style={{ fontSize: 11, padding: "4px 10px", borderRadius: 4, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Holdings ↗</a>
-            <a href={`https://www.morningstar.com/etfs/arcx/${sector.sym.toLowerCase()}/portfolio`} target="_blank" rel="noopener" style={{ fontSize: 11, padding: "4px 10px", borderRadius: 4, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Morningstar ↗</a>
+        <div style={{ padding: 10, background: COLORS.bg, borderRadius: 8, borderLeft: `3px solid ${COLORS.gold}` }}>
+          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>52W High</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: COLORS.text, marginTop: 2 }}>
+            {sectorReturns.oneYearHigh != null ? "$" + sectorReturns.oneYearHigh.toFixed(2) : "—"}
           </div>
         </div>
-        <div style={{ height: 180 }}><canvas ref={chartRef} /></div>
+      </div>
+
+      {/* Rolling 1Y chart with 52W markers */}
+      <Card style={{ padding: 14, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+          <div>
+            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Rolling 1-Year Price</div>
+            <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 2 }}>
+              <span style={{ color: COLORS.success }}>● 52W High</span> · <span style={{ color: COLORS.danger }}>● 52W Low</span> · <span style={{ color: COLORS.gold }}>● YTD Start</span>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <a href={`https://finance.yahoo.com/quote/${sector.sym}/holdings`} target="_blank" rel="noopener" style={{ fontSize: 11, padding: "4px 10px", borderRadius: 4, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Yahoo Holdings ↗</a>
+            <a href={morningstarUrl(sector.sym)} target="_blank" rel="noopener" style={{ fontSize: 11, padding: "4px 10px", borderRadius: 4, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Morningstar ↗</a>
+          </div>
+        </div>
+        <div style={{ height: 240 }}><canvas ref={chartRef} /></div>
       </Card>
 
-      {/* Sub-industries */}
+      {/* Sub-industries with extended return windows */}
       <Card style={{ padding: 14, marginBottom: 16 }}>
         <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, fontWeight: 600 }}>Sub-Industries in {sector.name}</div>
         <div style={{ fontSize: 11, color: COLORS.textDim, marginBottom: 12 }}>
-          Click any ETF to drill in. Sorted by YTD return.
+          Click 📊 for in-app fundamentals or ↗ for Morningstar. Sorted by YTD return.
         </div>
         {loading && subIndustryData.length === 0 ? (
           <div style={{ padding: 20, color: COLORS.textMuted, fontSize: 13, textAlign: "center" }}>Loading sub-industries…</div>
         ) : subIndustryData.length === 0 ? (
           <div style={{ padding: 20, color: COLORS.textMuted, fontSize: 13, textAlign: "center" }}>No sub-industries mapped for this sector.</div>
         ) : (
-          <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+          <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse", minWidth: 700 }}>
             <thead><tr style={{ background: COLORS.bg, textAlign: "left" }}>
               <th style={{ padding: "8px 10px" }}>ETF</th>
               <th style={{ padding: "8px 10px" }}>Industry</th>
               <th style={{ padding: "8px 10px", textAlign: "right" }}>Last</th>
-              <th style={{ padding: "8px 10px", textAlign: "right" }}>1 Month</th>
+              <th style={{ padding: "8px 10px", textAlign: "right" }}>52W High</th>
+              <th style={{ padding: "8px 10px", textAlign: "right" }}>1 Mo</th>
+              <th style={{ padding: "8px 10px", textAlign: "right" }}>60 Day</th>
+              <th style={{ padding: "8px 10px", textAlign: "right" }}>90 Day</th>
               <th style={{ padding: "8px 10px", textAlign: "right" }}>YTD</th>
+              <th style={{ padding: "8px 10px", textAlign: "right" }}>1 Year</th>
             </tr></thead>
             <tbody>
               {subIndustryData.map(sub => (
                 <tr key={sub.sym} style={{ borderTop: `1px solid ${COLORS.borderLight}` }}>
                   <td style={{ padding: "8px 10px" }}>
-                    <button onClick={() => { onClose(); onOpenStock && onOpenStock(sub.sym); }}
-                      style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontWeight: 700, fontSize: 12, color: COLORS.primary, cursor: "pointer", textDecoration: "underline" }}>
-                      {sub.sym}
-                    </button>
+                    <TickerAction symbol={sub.sym} onOpenDetail={(s) => { onClose(); onOpenStock && onOpenStock(s); }} style={{ fontSize: 12 }} />
                   </td>
                   <td style={{ padding: "8px 10px" }}>{sub.name}</td>
                   <td style={{ padding: "8px 10px", textAlign: "right", color: COLORS.textMuted }}>{sub.last != null ? "$" + sub.last.toFixed(2) : "—"}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", color: COLORS.textMuted }}>{sub.oneYearHigh != null ? "$" + sub.oneYearHigh.toFixed(2) : "—"}</td>
                   <td style={{ padding: "8px 10px", textAlign: "right" }}>
-                    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, background: heatColor(sub.oneMonth), color: "white", fontWeight: 700, minWidth: 60, textAlign: "center" }}>{fmtPct(sub.oneMonth)}</span>
+                    <span style={{ display: "inline-block", padding: "2px 6px", borderRadius: 4, background: heatColor(sub.oneMonth), color: "white", fontWeight: 700, minWidth: 56, textAlign: "center", fontSize: 11 }}>{fmtPct(sub.oneMonth)}</span>
                   </td>
                   <td style={{ padding: "8px 10px", textAlign: "right" }}>
-                    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, background: heatColor(sub.ytd), color: "white", fontWeight: 700, minWidth: 60, textAlign: "center" }}>{fmtPct(sub.ytd)}</span>
+                    <span style={{ display: "inline-block", padding: "2px 6px", borderRadius: 4, background: heatColor(sub.sixtyDay), color: "white", fontWeight: 700, minWidth: 56, textAlign: "center", fontSize: 11 }}>{fmtPct(sub.sixtyDay)}</span>
+                  </td>
+                  <td style={{ padding: "8px 10px", textAlign: "right" }}>
+                    <span style={{ display: "inline-block", padding: "2px 6px", borderRadius: 4, background: heatColor(sub.ninetyDay), color: "white", fontWeight: 700, minWidth: 56, textAlign: "center", fontSize: 11 }}>{fmtPct(sub.ninetyDay)}</span>
+                  </td>
+                  <td style={{ padding: "8px 10px", textAlign: "right" }}>
+                    <span style={{ display: "inline-block", padding: "2px 6px", borderRadius: 4, background: heatColor(sub.ytd), color: "white", fontWeight: 700, minWidth: 56, textAlign: "center", fontSize: 11 }}>{fmtPct(sub.ytd)}</span>
+                  </td>
+                  <td style={{ padding: "8px 10px", textAlign: "right" }}>
+                    <span style={{ display: "inline-block", padding: "2px 6px", borderRadius: 4, background: heatColor(sub.oneYear), color: "white", fontWeight: 700, minWidth: 56, textAlign: "center", fontSize: 11 }}>{fmtPct(sub.oneYear)}</span>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Card>
 
@@ -4896,8 +5125,8 @@ function SectorDetailModal({ sector, open, onClose, onOpenStock }) {
         <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>External Research</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <a href={`https://finance.yahoo.com/quote/${sector.sym}`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6, background: COLORS.surface, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Yahoo Finance · {sector.sym} ↗</a>
-          <a href={`https://www.morningstar.com/etfs/arcx/${sector.sym.toLowerCase()}/quote`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6, background: COLORS.surface, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Morningstar · {sector.sym} ↗</a>
-          <a href={`https://www.ssga.com/us/en/individual/etfs/the-${sector.name.toLowerCase().replace(/[^a-z]/g, "-")}-select-sector-spdr-fund-${sector.sym.toLowerCase()}`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6, background: COLORS.surface, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>SPDR Fact Sheet ↗</a>
+          <a href={morningstarUrl(sector.sym)} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6, background: COLORS.surface, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Morningstar · {sector.sym} ↗</a>
+          <a href={`https://www.sectorspdrs.com/sectorspdr/sector/${sector.sym.toLowerCase()}`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6, background: COLORS.surface, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>SPDR Sector Site ↗</a>
         </div>
       </Card>
     </Modal>
@@ -4908,7 +5137,8 @@ function StockDetailModal({ symbol, open, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [priceData, setPriceData] = useState(null);   // YTD price for chart
+  const [priceData, setPriceData] = useState(null);     // 1Y price data
+  const [returns, setReturns] = useState({});           // computed multi-window returns
   const priceCanvasRef = useRef(null);
   const priceChartRef = useRef(null);
   const revenueCanvasRef = useRef(null);
@@ -4920,15 +5150,43 @@ function StockDetailModal({ symbol, open, onClose }) {
     if (!open || !symbol) return;
     let cancelled = false;
     (async () => {
-      setLoading(true); setError(null); setData(null); setPriceData(null);
+      setLoading(true); setError(null); setData(null); setPriceData(null); setReturns({});
       try {
-        const [summary, priceHist] = await Promise.all([
+        // Pull rich fundamentals + rolling-1Y price + 5Y for the 3Y rolling return
+        const [summary, oneYr, threeMo, ytd, fiveYr] = await Promise.all([
           fetchYahooQuoteSummary(symbol),
+          fetchYahoo(symbol, "1y", "1d").catch(() => null),
+          fetchYahoo(symbol, "3mo", "1d").catch(() => null),
           fetchYahoo(symbol, "ytd", "1d").catch(() => null),
+          fetchYahoo(symbol, "5y", "1wk").catch(() => null),
         ]);
         if (cancelled) return;
+
+        const clean = (data) => data ? data.closes.filter(c => c !== null) : [];
+        const c3 = clean(threeMo);
+        const cY = clean(ytd);
+        const c1y = clean(oneYr);
+        const c5y = clean(fiveYr);
+        const ret = (arr, daysBack) => {
+          if (!arr || arr.length < 2) return null;
+          const start = daysBack && arr.length > daysBack ? arr[arr.length - daysBack] : arr[0];
+          return ((arr[arr.length - 1] - start) / start) * 100;
+        };
+
         setData(summary);
-        setPriceData(priceHist);
+        setPriceData(oneYr);
+        setReturns({
+          oneMonth: ret(c3, 21),
+          sixtyDay: ret(c3, 60),
+          ninetyDay: ret(c3, null),
+          ytd: ret(cY, null),
+          oneYear: ret(c1y, null),
+          threeYear: (() => {
+            if (c5y.length < 2) return null;
+            const start = c5y.length > 156 ? c5y[c5y.length - 156] : c5y[0];
+            return ((c5y[c5y.length - 1] - start) / start) * 100;
+          })(),
+        });
       } catch (e) {
         if (!cancelled) setError(e.message);
       } finally {
@@ -4938,40 +5196,97 @@ function StockDetailModal({ symbol, open, onClose }) {
     return () => { cancelled = true; };
   }, [open, symbol]);
 
-  // Price chart
+  // Rolling 1Y price chart with 52W high/low + YTD start + earnings date markers
   useEffect(() => {
     if (!open || !priceData || !priceCanvasRef.current) return;
     if (priceChartRef.current) { priceChartRef.current.destroy(); priceChartRef.current = null; }
     const cleanCloses = priceData.closes.filter(c => c !== null);
     const cleanTs = (priceData.ts || []).filter((_, i) => priceData.closes[i] !== null);
-    const start = cleanCloses[0];
-    const last = cleanCloses[cleanCloses.length - 1];
-    const up = last >= start;
+    const labels = cleanTs.map(t => new Date(t * 1000));
+    if (cleanCloses.length < 2) return;
+
+    // Marker indices
+    const hiIdx = cleanCloses.indexOf(Math.max(...cleanCloses));
+    const loIdx = cleanCloses.indexOf(Math.min(...cleanCloses));
+    const yearStart = new Date(new Date().getFullYear(), 0, 1);
+    let ytdStartIdx = labels.findIndex(d => d >= yearStart);
+    if (ytdStartIdx < 0) ytdStartIdx = 0;
+
+    // Earnings date indices (from data.earningsHistory) — find nearest labels
+    const earningsIdxs = [];
+    if (data?.earningsHistory) {
+      for (const e of data.earningsHistory) {
+        if (!e.quarter) continue;
+        const ed = new Date(e.quarter + "T00:00:00");
+        // Find the closest label date that's on or after the earnings date
+        const idx = labels.findIndex(d => d >= ed);
+        if (idx >= 0 && idx < cleanCloses.length) earningsIdxs.push(idx);
+      }
+    }
+
+    const up = cleanCloses[cleanCloses.length - 1] >= cleanCloses[0];
     priceChartRef.current = new Chart(priceCanvasRef.current, {
       type: "line",
       data: {
-        labels: cleanTs.map(t => new Date(t * 1000).toLocaleDateString()),
+        labels: labels.map(d => d.toLocaleDateString()),
         datasets: [{
+          label: symbol,
           data: cleanCloses,
           borderColor: up ? COLORS.success : COLORS.danger,
           backgroundColor: (up ? COLORS.success : COLORS.danger) + "15",
-          fill: true, pointRadius: 0, borderWidth: 2, tension: 0.2,
+          fill: true, borderWidth: 2, tension: 0.2,
+          pointRadius: cleanCloses.map((_, i) => {
+            if (i === hiIdx || i === loIdx || i === ytdStartIdx) return 6;
+            if (earningsIdxs.includes(i)) return 4;
+            return 0;
+          }),
+          pointBackgroundColor: cleanCloses.map((_, i) => {
+            if (i === hiIdx) return COLORS.success;
+            if (i === loIdx) return COLORS.danger;
+            if (i === ytdStartIdx) return COLORS.gold;
+            if (earningsIdxs.includes(i)) return COLORS.primaryDark;
+            return "transparent";
+          }),
+          pointBorderColor: cleanCloses.map((_, i) => {
+            if (i === hiIdx) return COLORS.success;
+            if (i === loIdx) return COLORS.danger;
+            if (i === ytdStartIdx) return COLORS.gold;
+            if (earningsIdxs.includes(i)) return COLORS.primaryDark;
+            return "transparent";
+          }),
         }],
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        scales: { y: { title: { display: true, text: "Price ($)" } } },
-        plugins: { legend: { display: false } },
+        scales: {
+          y: { title: { display: true, text: "Price ($)" }, ticks: { callback: (v) => "$" + v.toFixed(0) } },
+          x: { ticks: { maxTicksLimit: 8 } },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const lines = ["$" + ctx.raw.toFixed(2)];
+                if (ctx.dataIndex === hiIdx) lines.push("🟢 52-Week High");
+                if (ctx.dataIndex === loIdx) lines.push("🔴 52-Week Low");
+                if (ctx.dataIndex === ytdStartIdx) lines.push("📅 Jan 1 (YTD start)");
+                if (earningsIdxs.includes(ctx.dataIndex)) lines.push("📊 Earnings Release");
+                return lines;
+              },
+            },
+          },
+        },
       },
     });
     return () => { if (priceChartRef.current) priceChartRef.current.destroy(); };
-  }, [open, priceData]);
+  }, [open, priceData, data, symbol]);
 
-  // Revenue chart (last 4 quarters available from Yahoo free)
+  // Revenue chart
   useEffect(() => {
     if (!open || !data?.incomeQuarterly?.length || !revenueCanvasRef.current) return;
     if (revenueChartRef.current) { revenueChartRef.current.destroy(); revenueChartRef.current = null; }
-    const reversed = [...data.incomeQuarterly].reverse(); // chronological
+    const reversed = [...data.incomeQuarterly].reverse();
     revenueChartRef.current = new Chart(revenueCanvasRef.current, {
       type: "bar",
       data: {
@@ -4990,7 +5305,7 @@ function StockDetailModal({ symbol, open, onClose }) {
     return () => { if (revenueChartRef.current) revenueChartRef.current.destroy(); };
   }, [open, data]);
 
-  // Earnings (EPS) chart
+  // EPS chart
   useEffect(() => {
     if (!open || !data?.earningsHistory?.length || !earningsCanvasRef.current) return;
     if (earningsChartRef.current) { earningsChartRef.current.destroy(); earningsChartRef.current = null; }
@@ -5013,6 +5328,7 @@ function StockDetailModal({ symbol, open, onClose }) {
 
   const fmtBig = (n) => n == null ? "—" : n >= 1e12 ? "$" + (n / 1e12).toFixed(2) + "T" : n >= 1e9 ? "$" + (n / 1e9).toFixed(2) + "B" : n >= 1e6 ? "$" + (n / 1e6).toFixed(2) + "M" : "$" + n.toFixed(0);
   const fmtPct = (n) => n == null ? "—" : (n * 100).toFixed(2) + "%";
+  const fmtPctReturn = (n) => n == null ? "—" : (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
   const fmtNum = (n, digits = 2) => n == null ? "—" : Number(n).toFixed(digits);
   const fmtDate = (d) => !d ? "—" : (d instanceof Date ? d.toLocaleDateString() : d);
 
@@ -5022,7 +5338,7 @@ function StockDetailModal({ symbol, open, onClose }) {
       {error && <div style={{ padding: 24, background: COLORS.danger + "15", borderRadius: 8, color: COLORS.danger }}>Failed to load: {error}</div>}
       {data && (
         <div>
-          {/* Header */}
+          {/* Header with prominent Morningstar link */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, gap: 16, flexWrap: "wrap" }}>
             <div>
               <div style={{ fontSize: 22, fontWeight: 800, color: COLORS.text }}>{data.symbol}</div>
@@ -5030,16 +5346,43 @@ function StockDetailModal({ symbol, open, onClose }) {
               <div style={{ fontSize: 28, fontWeight: 700, color: COLORS.primary, marginTop: 6 }}>${fmtNum(data.last)}</div>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <a href={`https://finance.yahoo.com/quote/${data.symbol}`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Yahoo Finance ↗</a>
-              <a href={`https://www.morningstar.com/stocks/xnas/${data.symbol.toLowerCase()}/quote`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Morningstar ↗</a>
-              <a href={`https://www.google.com/finance/quote/${data.symbol}:NASDAQ`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Google Finance ↗</a>
+              <a href={morningstarUrl(data.symbol)} target="_blank" rel="noopener"
+                 style={{ fontSize: 13, padding: "10px 16px", borderRadius: 8, background: COLORS.primary, color: "white", textDecoration: "none", fontWeight: 700, boxShadow: "0 2px 8px rgba(47,172,234,0.3)" }}>
+                ⭐ View on Morningstar ↗
+              </a>
+              <a href={`https://finance.yahoo.com/quote/${data.symbol}`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "8px 12px", borderRadius: 6, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Yahoo ↗</a>
+              <a href={`https://www.google.com/finance/quote/${data.symbol}:NASDAQ`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "8px 12px", borderRadius: 6, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Google Finance ↗</a>
             </div>
           </div>
 
-          {/* Price chart */}
+          {/* Multi-window returns */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginBottom: 16 }}>
+            {[
+              ["1 Month", returns.oneMonth],
+              ["60 Day", returns.sixtyDay],
+              ["90 Day", returns.ninetyDay],
+              ["YTD", returns.ytd],
+              ["1 Year", returns.oneYear],
+              ["3 Year", returns.threeYear],
+            ].map(([label, val]) => (
+              <div key={label} style={{ padding: 10, background: COLORS.bg, borderRadius: 8, borderLeft: `3px solid ${val == null ? COLORS.textMuted : (val >= 0 ? COLORS.success : COLORS.danger)}` }}>
+                <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>{label}</div>
+                <div style={{ fontSize: 17, fontWeight: 800, color: val == null ? COLORS.textMuted : (val >= 0 ? COLORS.success : COLORS.danger), marginTop: 2 }}>
+                  {fmtPctReturn(val)}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Rolling 1Y price chart with markers */}
           <Card style={{ padding: 14, marginBottom: 16 }}>
-            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>YTD Price</div>
-            <div style={{ height: 200 }}><canvas ref={priceCanvasRef} /></div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 4 }}>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Rolling 1-Year Price</div>
+              <div style={{ fontSize: 11, color: COLORS.textDim }}>
+                <span style={{ color: COLORS.success }}>● 52W High</span> · <span style={{ color: COLORS.danger }}>● 52W Low</span> · <span style={{ color: COLORS.gold }}>● YTD Start</span> · <span style={{ color: COLORS.primaryDark }}>● Earnings</span>
+              </div>
+            </div>
+            <div style={{ height: 240 }}><canvas ref={priceCanvasRef} /></div>
           </Card>
 
           {/* Fundamentals grid */}
@@ -5057,12 +5400,16 @@ function StockDetailModal({ symbol, open, onClose }) {
                 ["Dividend Rate", "$" + fmtNum(data.dividendRate)],
                 ["Payout Ratio", fmtPct(data.payoutRatio)],
                 ["Profit Margin", fmtPct(data.profitMargin)],
+                ["Operating Margin", fmtPct(data.operatingMargin)],
+                ["Gross Margin", fmtPct(data.grossMargin)],
                 ["Beta", fmtNum(data.beta)],
                 ["52W High", "$" + fmtNum(data.fiftyTwoWeekHigh)],
                 ["52W Low", "$" + fmtNum(data.fiftyTwoWeekLow)],
                 ["Revenue (TTM)", fmtBig(data.revenue)],
-                ["Revenue Growth (YoY)", fmtPct(data.revenueGrowth)],
+                ["Revenue Growth YoY", fmtPct(data.revenueGrowth)],
+                ["Earnings Growth YoY", fmtPct(data.earningsGrowth)],
                 ["Return on Equity", fmtPct(data.returnOnEquity)],
+                ["Debt / Equity", fmtNum(data.debtToEquity)],
               ].map(([label, val], i) => (
                 <div key={i}>
                   <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
@@ -5228,9 +5575,7 @@ function StockDashboard({ universe, setUniverse, canEdit }) {
               return (
                 <tr key={stk.sym} style={{ borderTop: `1px solid ${COLORS.borderLight}` }}>
                   <td style={{ padding: "10px 12px", fontWeight: 700 }}>
-                    <button onClick={() => setDetailSymbol(stk.sym)} style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontWeight: 700, color: COLORS.primary, cursor: "pointer", textDecoration: "underline" }}>
-                      {stk.sym}
-                    </button>
+                    <TickerAction symbol={stk.sym} onOpenDetail={setDetailSymbol} />
                   </td>
                   <td style={{ padding: "10px 12px", color: COLORS.textMuted }}>{stk.name}</td>
                   <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 600 }}>{q ? "$" + q.last.toFixed(2) : "—"}</td>
@@ -5488,9 +5833,8 @@ function MacroDashboard() {
       {(() => {
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const upcoming = FOMC_SCHEDULE_2026.filter(m => new Date(m.date + "T00:00:00") >= today);
-        const next = upcoming[0] || null;
-        const nextDate = next ? new Date(next.date + "T00:00:00") : null;
-        const daysUntil = nextDate ? Math.ceil((nextDate - today) / (1000 * 60 * 60 * 24)) : null;
+        // Show next 3 meetings (not just 1)
+        const nextThree = upcoming.slice(0, 3);
         // The last completed meeting
         const past = FOMC_SCHEDULE_2026.filter(m => new Date(m.date + "T00:00:00") < today);
         const last = past[past.length - 1] || null;
@@ -5498,30 +5842,38 @@ function MacroDashboard() {
           <Card style={{ padding: 18, marginBottom: 16, background: COLORS.bg, borderLeft: `4px solid ${COLORS.primaryDark}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 12 }}>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.text }}>FOMC — Next Meeting & Recent Decisions</div>
-                <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>Federal Open Market Committee · official Fed monetary policy meetings</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.text }}>FOMC — Upcoming Meetings</div>
+                <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>Federal Open Market Committee · next 3 scheduled meetings + last decision</div>
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 14 }}>
-              {next && (
-                <div style={{ padding: 14, background: COLORS.surface, borderRadius: 8, borderTop: `3px solid ${COLORS.gold}` }}>
-                  <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Next Meeting</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: COLORS.text, marginTop: 4 }}>
-                    {nextDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 14 }}>
+              {nextThree.map((mtg, i) => {
+                const mtgDate = new Date(mtg.date + "T00:00:00");
+                const daysUntil = Math.ceil((mtgDate - today) / (1000 * 60 * 60 * 24));
+                const isNext = i === 0;
+                return (
+                  <div key={mtg.date} style={{ padding: 14, background: COLORS.surface, borderRadius: 8, borderTop: `3px solid ${isNext ? COLORS.gold : COLORS.primary}` }}>
+                    <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>
+                      {isNext ? "Next Meeting" : `Meeting ${i + 1}`}
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.text, marginTop: 4 }}>
+                      {mtgDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </div>
+                    <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 4 }}>
+                      in {daysUntil} day{daysUntil === 1 ? "" : "s"}
+                    </div>
+                    <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 2 }}>{mtg.note}</div>
                   </div>
-                  <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 4 }}>
-                    in {daysUntil} day{daysUntil === 1 ? "" : "s"} · {next.note}
-                  </div>
-                </div>
-              )}
+                );
+              })}
               {last && (
-                <div style={{ padding: 14, background: COLORS.surface, borderRadius: 8, borderTop: `3px solid ${COLORS.primary}` }}>
+                <div style={{ padding: 14, background: COLORS.surface, borderRadius: 8, borderTop: `3px solid ${COLORS.textMuted}`, opacity: 0.8 }}>
                   <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Last Meeting</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: COLORS.text, marginTop: 4 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.text, marginTop: 4 }}>
                     {new Date(last.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                   </div>
-                  <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 4 }}>{last.note}</div>
+                  <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 6 }}>{last.note}</div>
                 </div>
               )}
             </div>
@@ -5541,7 +5893,7 @@ function MacroDashboard() {
 
       {/* Client-facing presentation links */}
       <Card style={{ padding: 18, borderLeft: `4px solid ${COLORS.primary}` }}>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Client-Facing Market Resources</div>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Third-Party Materials</div>
         <div style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 14, lineHeight: 1.5 }}>
           These are published by third parties (free to view, copyrighted to their publishers). Use as supplemental client material — open in a new tab.
         </div>
