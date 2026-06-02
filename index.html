@@ -13,6 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
@@ -3287,18 +3288,18 @@ async function fetchYieldCurve() {
 }
 
 async function fetchFearGreed() {
-  // CNN's endpoint expects a date suffix (YYYY-MM-DD). Use yesterday to be safe
-  // (today's data is only available after market hours; weekend → use Friday).
+  // CNN's endpoint returns history starting from the date in the URL path.
+  // To get ~1 year of history we pass a date 12 months ago.
+  // The most-recent reading in the payload becomes the "current" score.
   const d = new Date();
-  d.setDate(d.getDate() - 1);
+  d.setFullYear(d.getFullYear() - 1);
   const dateStr = d.toISOString().split("T")[0];
   const url = `https://production.dataviz.cnn.io/index/fearandgreed/graphdata/${dateStr}`;
   try {
     const data = await fetchThroughProxies(url, { expectJSON: true });
     const fg = data.fear_and_greed;
     if (!fg) return null;
-    // Historical series — CNN returns the rolling 1-year series in the same payload
-    // under "fear_and_greed_historical.data" (array of {x: timestamp_ms, y: score, rating})
+    // CNN payload: fear_and_greed_historical.data = [{x: ms_timestamp, y: score, rating}, ...]
     const hist = data?.fear_and_greed_historical?.data || [];
     return {
       score: Math.round(fg.score),
@@ -4291,14 +4292,24 @@ function FearGreedCard({ data }) {
     if (!data?.historical?.length || !histCanvasRef.current) return;
     if (histChartRef.current) { histChartRef.current.destroy(); histChartRef.current = null; }
     const hist = data.historical;
-    // Take last ~365 days
-    const oneYearMs = 365 * 24 * 60 * 60 * 1000;
-    const cutoff = Date.now() - oneYearMs;
-    const recent = hist.filter(h => h.ts >= cutoff);
+    // Take last 6 months — denser data is easier to read on a small chart
+    const sixMonthMs = 183 * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - sixMonthMs;
+    const recent = hist.filter(h => h.ts >= cutoff).sort((a, b) => a.ts - b.ts);
+    if (recent.length < 2) return;
+
+    const ratingFromScore = (s) => {
+      if (s <= 25) return { label: "Extreme Fear", color: "#991B1B" };
+      if (s <= 45) return { label: "Fear", color: "#DC2626" };
+      if (s <= 55) return { label: "Neutral", color: "#D97706" };
+      if (s <= 75) return { label: "Greed", color: "#16A34A" };
+      return { label: "Extreme Greed", color: "#15803D" };
+    };
+
     histChartRef.current = new Chart(histCanvasRef.current, {
       type: "line",
       data: {
-        labels: recent.map(h => new Date(h.ts).toLocaleDateString()),
+        labels: recent.map(h => new Date(h.ts)),
         datasets: [{
           label: "F&G Score",
           data: recent.map(h => h.score),
@@ -4306,29 +4317,35 @@ function FearGreedCard({ data }) {
           backgroundColor: "rgba(217,119,6,0.1)",
           fill: true,
           pointRadius: 0,
-          borderWidth: 1.5,
-          tension: 0.2,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: "#D97706",
+          borderWidth: 2,
+          tension: 0.3,
         }],
       },
       options: {
         responsive: true, maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
         scales: {
-          y: { min: 0, max: 100, ticks: { stepSize: 25 } },
-          x: { ticks: { maxTicksLimit: 6 } },
+          y: { min: 0, max: 100, ticks: { stepSize: 25, callback: (v) => v } },
+          x: {
+            type: "time",
+            time: { unit: "month", displayFormats: { month: "MMM yyyy" } },
+            ticks: { maxTicksLimit: 6, autoSkip: true },
+          },
         },
         plugins: {
           legend: { display: false },
           tooltip: {
             callbacks: {
+              title: (ctxs) => {
+                const ts = ctxs[0].parsed.x;
+                return new Date(ts).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+              },
               label: (ctx) => {
-                const score = ctx.raw;
-                let rating = "Neutral";
-                if (score <= 25) rating = "Extreme Fear";
-                else if (score <= 45) rating = "Fear";
-                else if (score <= 55) rating = "Neutral";
-                else if (score <= 75) rating = "Greed";
-                else rating = "Extreme Greed";
-                return [`Score: ${score}`, rating];
+                const score = ctx.parsed.y;
+                const rating = ratingFromScore(score);
+                return [`Score: ${score}`, `Rating: ${rating.label}`];
               },
             },
           },
@@ -4387,8 +4404,8 @@ function FearGreedCard({ data }) {
           {/* 1Y rolling chart */}
           {data.historical && data.historical.length > 0 && (
             <div>
-              <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>1-Year History</div>
-              <div style={{ height: 100 }}><canvas ref={histCanvasRef} /></div>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>6-Month Trend</div>
+              <div style={{ height: 140 }}><canvas ref={histCanvasRef} /></div>
             </div>
           )}
         </>
@@ -4736,9 +4753,29 @@ function PointerOSSignal({ onOpenSector, onOpenStock }) {
         .sort((a, b) => b.z60 - a.z60)
         .slice(0, 5);
 
+      // Sector-level aggregates: mean 60-day return per parent sector
+      const bySector = {};
+      enriched.forEach(r => {
+        if (r.sixtyDay == null) return;
+        if (!bySector[r.parent]) bySector[r.parent] = [];
+        bySector[r.parent].push(r.sixtyDay);
+      });
+      const sectorRanking = Object.entries(bySector).map(([parent, returns]) => {
+        const sectorMeta = SECTOR_ETFS.find(s => s.sym === parent);
+        const avg = returns.reduce((s, v) => s + v, 0) / returns.length;
+        return {
+          sym: parent,
+          name: sectorMeta?.name || parent,
+          avg,
+          count: returns.length,
+          z: sd60 > 0 ? (avg - mean60) / sd60 : 0,
+        };
+      }).sort((a, b) => a.avg - b.avg);
+
       setScanResults({
         dislocations,
         leaders,
+        sectorRanking,
         universeMean: mean60,
         universeStdev: sd60,
         scannedAt: new Date(),
@@ -4796,7 +4833,7 @@ function PointerOSSignal({ onOpenSector, onOpenStock }) {
           </div>
           <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>60-Day Dislocations & Momentum</div>
           <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4, lineHeight: 1.5, maxWidth: 720 }}>
-            Quantitative scan across {ALL_SUB_INDUSTRIES.length} sub-industry ETFs. Z-scores measure how far each ETF's trailing 60-day return is from the universe mean. <b>Negative z = laggard / potential opportunity. Positive z = leader / momentum.</b> Not investment advice.
+            Quantitative scan across {ALL_SUB_INDUSTRIES.length} sub-industry ETFs. Z-scores measure how far each ETF's trailing 60-day return is from the universe mean. <b>Negative z = laggard / potential opportunity. Positive z = leader / momentum.</b>
           </div>
         </div>
         <Button size="sm" variant="ghost" onClick={runScan}>{loading ? "Scanning…" : "↻ Rescan"}</Button>
@@ -4816,7 +4853,7 @@ function PointerOSSignal({ onOpenSector, onOpenStock }) {
 
       {scanResults && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.danger, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>▼ Top 5 Dislocations</div>
               <div style={{ fontSize: 10, color: COLORS.textMuted, marginBottom: 8 }}>Most negative 60-day z-scores</div>
@@ -4834,6 +4871,32 @@ function PointerOSSignal({ onOpenSector, onOpenStock }) {
               ) : scanResults.leaders.map(item => (
                 <SignalRow key={item.sym} item={item} type="leader" />
               ))}
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.primary, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>● Sector Breakdown</div>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, marginBottom: 8 }}>Average 60-day return across sub-industries</div>
+              {(scanResults.sectorRanking || []).map(sec => {
+                const sectorObj = SECTOR_ETFS.find(s => s.sym === sec.sym);
+                return (
+                  <div key={sec.sym} style={{ padding: 10, background: COLORS.surface, borderRadius: 8, border: `1px solid ${COLORS.border}`, borderLeft: `4px solid ${sec.avg >= 0 ? COLORS.success : COLORS.danger}`, marginBottom: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <button onClick={() => sectorObj && onOpenSector && onOpenSector(sectorObj)}
+                          style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontWeight: 700, fontSize: 13, color: COLORS.text, cursor: "pointer", textDecoration: "underline", textAlign: "left" }}>
+                          {sec.name}
+                        </button>
+                        <div style={{ fontSize: 10, color: COLORS.textMuted }}>{sec.sym} · {sec.count} sub-industries</div>
+                      </div>
+                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: sec.avg >= 0 ? COLORS.success : COLORS.danger }}>
+                          {sec.avg >= 0 ? "+" : ""}{sec.avg.toFixed(2)}%
+                        </div>
+                        <div style={{ fontSize: 10, color: COLORS.textDim }}>z: {sec.z.toFixed(2)}σ</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -5137,8 +5200,15 @@ function StockDetailModal({ symbol, open, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [fundamentalsError, setFundamentalsError] = useState(null);
   const [priceData, setPriceData] = useState(null);     // 1Y price data
   const [returns, setReturns] = useState({});           // computed multi-window returns
+  const [expanded, setExpanded] = useState({           // collapsible sections
+    metrics: true,
+    earnings: true,
+    dividend: false,
+    sentiment: false,
+  });
   const priceCanvasRef = useRef(null);
   const priceChartRef = useRef(null);
   const revenueCanvasRef = useRef(null);
@@ -5150,19 +5220,25 @@ function StockDetailModal({ symbol, open, onClose }) {
     if (!open || !symbol) return;
     let cancelled = false;
     (async () => {
-      setLoading(true); setError(null); setData(null); setPriceData(null); setReturns({});
+      setLoading(true); setError(null); setFundamentalsError(null);
+      setData(null); setPriceData(null); setReturns({});
+
+      // === Step 1: Always fetch price data first. This must succeed for any view. ===
       try {
-        // Pull rich fundamentals + rolling-1Y price + 5Y for the 3Y rolling return
-        const [summary, oneYr, threeMo, ytd, fiveYr] = await Promise.all([
-          fetchYahooQuoteSummary(symbol),
-          fetchYahoo(symbol, "1y", "1d").catch(() => null),
+        const [oneYr, threeMo, ytd, fiveYr] = await Promise.all([
+          fetchYahoo(symbol, "1y", "1d").catch(e => { console.warn("1y fail", e.message); return null; }),
           fetchYahoo(symbol, "3mo", "1d").catch(() => null),
           fetchYahoo(symbol, "ytd", "1d").catch(() => null),
           fetchYahoo(symbol, "5y", "1wk").catch(() => null),
         ]);
         if (cancelled) return;
+        if (!oneYr && !threeMo && !ytd) {
+          setError("Failed to fetch any price data. Check your Cloudflare Worker URL in HR → Settings.");
+          setLoading(false);
+          return;
+        }
 
-        const clean = (data) => data ? data.closes.filter(c => c !== null) : [];
+        const clean = (d) => d ? d.closes.filter(c => c !== null) : [];
         const c3 = clean(threeMo);
         const cY = clean(ytd);
         const c1y = clean(oneYr);
@@ -5172,9 +5248,7 @@ function StockDetailModal({ symbol, open, onClose }) {
           const start = daysBack && arr.length > daysBack ? arr[arr.length - daysBack] : arr[0];
           return ((arr[arr.length - 1] - start) / start) * 100;
         };
-
-        setData(summary);
-        setPriceData(oneYr);
+        setPriceData(oneYr || threeMo || ytd);
         setReturns({
           oneMonth: ret(c3, 21),
           sixtyDay: ret(c3, 60),
@@ -5188,7 +5262,18 @@ function StockDetailModal({ symbol, open, onClose }) {
           })(),
         });
       } catch (e) {
-        if (!cancelled) setError(e.message);
+        if (!cancelled) setError("Price fetch failed: " + e.message);
+        setLoading(false);
+        return;
+      }
+
+      // === Step 2: Best-effort fetch of rich fundamentals. ===
+      // Failure here is non-fatal — we still show price + Morningstar link.
+      try {
+        const summary = await fetchYahooQuoteSummary(symbol);
+        if (!cancelled) setData(summary);
+      } catch (e) {
+        if (!cancelled) setFundamentalsError(e.message);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -5331,159 +5416,255 @@ function StockDetailModal({ symbol, open, onClose }) {
   const fmtPctReturn = (n) => n == null ? "—" : (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
   const fmtNum = (n, digits = 2) => n == null ? "—" : Number(n).toFixed(digits);
   const fmtDate = (d) => !d ? "—" : (d instanceof Date ? d.toLocaleDateString() : d);
+  const toggle = (key) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
+
+  // Pull last price from priceData (always available if any fetch succeeded) or from fundamentals
+  const cleanCloses = priceData ? priceData.closes.filter(c => c !== null) : [];
+  const lastPrice = cleanCloses.length ? cleanCloses[cleanCloses.length - 1] : data?.last;
+
+  // Section header (collapsible)
+  const SectionHeader = ({ keyName, title, sub }) => (
+    <div onClick={() => toggle(keyName)}
+      style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: COLORS.bg, borderRadius: 8, marginBottom: expanded[keyName] ? 8 : 0 }}>
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.text }}>{title}</div>
+        {sub && <div style={{ fontSize: 10, color: COLORS.textMuted, marginTop: 2 }}>{sub}</div>}
+      </div>
+      <div style={{ fontSize: 14, color: COLORS.textMuted }}>{expanded[keyName] ? "▾" : "▸"}</div>
+    </div>
+  );
 
   return (
     <Modal open={open} onClose={onClose} title={`${symbol} — Stock Detail`} wide={true}>
-      {loading && <div style={{ padding: 40, textAlign: "center", color: COLORS.textMuted }}>Loading…</div>}
-      {error && <div style={{ padding: 24, background: COLORS.danger + "15", borderRadius: 8, color: COLORS.danger }}>Failed to load: {error}</div>}
+      {/* Header — Morningstar link always shown, even before any data loads */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, gap: 16, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: COLORS.text }}>{symbol}</div>
+          {data?.name && <div style={{ fontSize: 13, color: COLORS.textMuted }}>{data.name}</div>}
+          {lastPrice != null && <div style={{ fontSize: 28, fontWeight: 700, color: COLORS.primary, marginTop: 6 }}>${fmtNum(lastPrice)}</div>}
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <a href={morningstarUrl(symbol)} target="_blank" rel="noopener"
+             style={{ fontSize: 13, padding: "10px 16px", borderRadius: 8, background: COLORS.primary, color: "white", textDecoration: "none", fontWeight: 700, boxShadow: "0 2px 8px rgba(47,172,234,0.3)" }}>
+            ⭐ View on Morningstar ↗
+          </a>
+          <a href={`https://finance.yahoo.com/quote/${symbol}`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "8px 12px", borderRadius: 6, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Yahoo ↗</a>
+          <a href={`https://www.google.com/finance/quote/${symbol}:NASDAQ`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "8px 12px", borderRadius: 6, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Google Finance ↗</a>
+        </div>
+      </div>
+
+      {/* Loading / error states */}
+      {loading && <div style={{ padding: 24, textAlign: "center", color: COLORS.textMuted, fontSize: 13 }}>Loading data…</div>}
+      {error && (
+        <div style={{ padding: 16, background: COLORS.danger + "15", borderRadius: 8, color: COLORS.danger, fontSize: 13, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Couldn't load data</div>
+          <div>{error}</div>
+          <div style={{ marginTop: 8, color: COLORS.text, fontSize: 12 }}>
+            Use the <b>⭐ Morningstar</b> button above to view this ticker's full fundamentals on Morningstar's site.
+          </div>
+        </div>
+      )}
+
+      {/* Multi-window returns — based on price fetch alone */}
+      {(returns.oneMonth != null || returns.ytd != null || returns.oneYear != null) && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginBottom: 16 }}>
+          {[
+            ["1 Month", returns.oneMonth],
+            ["60 Day", returns.sixtyDay],
+            ["90 Day", returns.ninetyDay],
+            ["YTD", returns.ytd],
+            ["1 Year", returns.oneYear],
+            ["3 Year", returns.threeYear],
+          ].map(([label, val]) => (
+            <div key={label} style={{ padding: 10, background: COLORS.bg, borderRadius: 8, borderLeft: `3px solid ${val == null ? COLORS.textMuted : (val >= 0 ? COLORS.success : COLORS.danger)}` }}>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>{label}</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: val == null ? COLORS.textMuted : (val >= 0 ? COLORS.success : COLORS.danger), marginTop: 2 }}>
+                {fmtPctReturn(val)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Rolling 1Y price chart — always shown if priceData loaded */}
+      {priceData && (
+        <Card style={{ padding: 14, marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 4 }}>
+            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Rolling 1-Year Price</div>
+            <div style={{ fontSize: 11, color: COLORS.textDim }}>
+              <span style={{ color: COLORS.success }}>● 52W High</span> · <span style={{ color: COLORS.danger }}>● 52W Low</span> · <span style={{ color: COLORS.gold }}>● YTD Start</span>{data?.earningsHistory?.length ? <> · <span style={{ color: COLORS.primaryDark }}>● Earnings</span></> : null}
+            </div>
+          </div>
+          <div style={{ height: 240 }}><canvas ref={priceCanvasRef} /></div>
+        </Card>
+      )}
+
+      {/* Fundamentals — show banner if failed, else collapsible sections */}
+      {fundamentalsError && (
+        <Card style={{ padding: 14, marginBottom: 16, background: COLORS.gold + "15", borderLeft: `4px solid ${COLORS.gold}` }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.text, marginBottom: 4 }}>Fundamentals unavailable</div>
+          <div style={{ fontSize: 11, color: COLORS.textMuted, lineHeight: 1.5 }}>
+            Yahoo's fundamentals endpoint failed for this ticker. Try the ⭐ Morningstar link above for P/E, dividend, EPS history, and more.
+          </div>
+          <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 6, fontFamily: "ui-monospace, monospace" }}>{fundamentalsError}</div>
+        </Card>
+      )}
+
       {data && (
         <div>
-          {/* Header with prominent Morningstar link */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, gap: 16, flexWrap: "wrap" }}>
-            <div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: COLORS.text }}>{data.symbol}</div>
-              <div style={{ fontSize: 13, color: COLORS.textMuted }}>{data.name}</div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: COLORS.primary, marginTop: 6 }}>${fmtNum(data.last)}</div>
-            </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <a href={morningstarUrl(data.symbol)} target="_blank" rel="noopener"
-                 style={{ fontSize: 13, padding: "10px 16px", borderRadius: 8, background: COLORS.primary, color: "white", textDecoration: "none", fontWeight: 700, boxShadow: "0 2px 8px rgba(47,172,234,0.3)" }}>
-                ⭐ View on Morningstar ↗
-              </a>
-              <a href={`https://finance.yahoo.com/quote/${data.symbol}`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "8px 12px", borderRadius: 6, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Yahoo ↗</a>
-              <a href={`https://www.google.com/finance/quote/${data.symbol}:NASDAQ`} target="_blank" rel="noopener" style={{ fontSize: 12, padding: "8px 12px", borderRadius: 6, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Google Finance ↗</a>
-            </div>
-          </div>
-
-          {/* Multi-window returns */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginBottom: 16 }}>
-            {[
-              ["1 Month", returns.oneMonth],
-              ["60 Day", returns.sixtyDay],
-              ["90 Day", returns.ninetyDay],
-              ["YTD", returns.ytd],
-              ["1 Year", returns.oneYear],
-              ["3 Year", returns.threeYear],
-            ].map(([label, val]) => (
-              <div key={label} style={{ padding: 10, background: COLORS.bg, borderRadius: 8, borderLeft: `3px solid ${val == null ? COLORS.textMuted : (val >= 0 ? COLORS.success : COLORS.danger)}` }}>
-                <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>{label}</div>
-                <div style={{ fontSize: 17, fontWeight: 800, color: val == null ? COLORS.textMuted : (val >= 0 ? COLORS.success : COLORS.danger), marginTop: 2 }}>
-                  {fmtPctReturn(val)}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Rolling 1Y price chart with markers */}
-          <Card style={{ padding: 14, marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 4 }}>
-              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Rolling 1-Year Price</div>
-              <div style={{ fontSize: 11, color: COLORS.textDim }}>
-                <span style={{ color: COLORS.success }}>● 52W High</span> · <span style={{ color: COLORS.danger }}>● 52W Low</span> · <span style={{ color: COLORS.gold }}>● YTD Start</span> · <span style={{ color: COLORS.primaryDark }}>● Earnings</span>
-              </div>
-            </div>
-            <div style={{ height: 240 }}><canvas ref={priceCanvasRef} /></div>
-          </Card>
-
-          {/* Fundamentals grid */}
-          <Card style={{ padding: 14, marginBottom: 16 }}>
-            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>Key Metrics</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
-              {[
-                ["Market Cap", fmtBig(data.marketCap)],
-                ["P/E (TTM)", fmtNum(data.pe)],
-                ["Forward P/E", fmtNum(data.forwardPE)],
-                ["PEG Ratio", fmtNum(data.peg)],
-                ["EPS (TTM)", "$" + fmtNum(data.eps)],
-                ["EPS (Fwd)", "$" + fmtNum(data.epsForward)],
-                ["Dividend Yield", fmtPct(data.dividendYield)],
-                ["Dividend Rate", "$" + fmtNum(data.dividendRate)],
-                ["Payout Ratio", fmtPct(data.payoutRatio)],
-                ["Profit Margin", fmtPct(data.profitMargin)],
-                ["Operating Margin", fmtPct(data.operatingMargin)],
-                ["Gross Margin", fmtPct(data.grossMargin)],
-                ["Beta", fmtNum(data.beta)],
-                ["52W High", "$" + fmtNum(data.fiftyTwoWeekHigh)],
-                ["52W Low", "$" + fmtNum(data.fiftyTwoWeekLow)],
-                ["Revenue (TTM)", fmtBig(data.revenue)],
-                ["Revenue Growth YoY", fmtPct(data.revenueGrowth)],
-                ["Earnings Growth YoY", fmtPct(data.earningsGrowth)],
-                ["Return on Equity", fmtPct(data.returnOnEquity)],
-                ["Debt / Equity", fmtNum(data.debtToEquity)],
-              ].map(([label, val], i) => (
-                <div key={i}>
-                  <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text, marginTop: 2 }}>{val}</div>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* Earnings + Revenue charts */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 12, marginBottom: 16 }}>
-            {data.earningsHistory.length > 0 && (
-              <Card style={{ padding: 14 }}>
-                <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>EPS — Last Quarters (Actual vs Estimate)</div>
-                <div style={{ height: 180 }}><canvas ref={earningsCanvasRef} /></div>
-              </Card>
-            )}
-            {data.incomeQuarterly.length > 0 && (
-              <Card style={{ padding: 14 }}>
-                <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>Revenue — Last Quarters</div>
-                <div style={{ height: 180 }}><canvas ref={revenueCanvasRef} /></div>
-              </Card>
-            )}
-          </div>
-
-          {/* Earnings history table */}
-          {data.earningsHistory.length > 0 && (
-            <Card style={{ padding: 14, marginBottom: 16 }}>
-              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>Earnings History</div>
-              <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-                <thead><tr style={{ background: COLORS.bg, textAlign: "left" }}>
-                  <th style={{ padding: "6px 10px" }}>Period</th>
-                  <th style={{ padding: "6px 10px" }}>Quarter</th>
-                  <th style={{ padding: "6px 10px", textAlign: "right" }}>EPS Actual</th>
-                  <th style={{ padding: "6px 10px", textAlign: "right" }}>EPS Estimate</th>
-                  <th style={{ padding: "6px 10px", textAlign: "right" }}>Surprise %</th>
-                </tr></thead>
-                <tbody>
-                  {data.earningsHistory.map((e, i) => (
-                    <tr key={i} style={{ borderTop: `1px solid ${COLORS.borderLight}` }}>
-                      <td style={{ padding: "6px 10px" }}>{e.period}</td>
-                      <td style={{ padding: "6px 10px", color: COLORS.textMuted }}>{e.quarter || "—"}</td>
-                      <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 600 }}>${fmtNum(e.epsActual)}</td>
-                      <td style={{ padding: "6px 10px", textAlign: "right", color: COLORS.textMuted }}>${fmtNum(e.epsEstimate)}</td>
-                      <td style={{ padding: "6px 10px", textAlign: "right", color: (e.surprisePct ?? 0) >= 0 ? COLORS.success : COLORS.danger, fontWeight: 600 }}>
-                        {e.surprisePct != null ? (e.surprisePct >= 0 ? "+" : "") + fmtNum(e.surprisePct) + "%" : "—"}
-                      </td>
-                    </tr>
+          {/* === Key Metrics (collapsible) === */}
+          <div style={{ marginBottom: 12 }}>
+            <SectionHeader keyName="metrics" title="Key Metrics" sub="P/E, PEG, EPS, margins, growth — click to collapse" />
+            {expanded.metrics && (
+              <Card style={{ padding: 14, marginTop: 0 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+                  {[
+                    ["Market Cap", fmtBig(data.marketCap)],
+                    ["P/E (TTM)", fmtNum(data.pe)],
+                    ["Forward P/E", fmtNum(data.forwardPE)],
+                    ["PEG Ratio", fmtNum(data.peg)],
+                    ["EPS (TTM)", "$" + fmtNum(data.eps)],
+                    ["EPS (Fwd)", "$" + fmtNum(data.epsForward)],
+                    ["Profit Margin", fmtPct(data.profitMargin)],
+                    ["Operating Margin", fmtPct(data.operatingMargin)],
+                    ["Gross Margin", fmtPct(data.grossMargin)],
+                    ["Beta", fmtNum(data.beta)],
+                    ["52W High", "$" + fmtNum(data.fiftyTwoWeekHigh)],
+                    ["52W Low", "$" + fmtNum(data.fiftyTwoWeekLow)],
+                    ["Revenue (TTM)", fmtBig(data.revenue)],
+                    ["Revenue Growth YoY", fmtPct(data.revenueGrowth)],
+                    ["Earnings Growth YoY", fmtPct(data.earningsGrowth)],
+                    ["Return on Equity", fmtPct(data.returnOnEquity)],
+                    ["Debt / Equity", fmtNum(data.debtToEquity)],
+                  ].map(([label, val], i) => (
+                    <div key={i}>
+                      <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text, marginTop: 2 }}>{val}</div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </Card>
+                </div>
+              </Card>
+            )}
+          </div>
+
+          {/* === Earnings & Revenue (collapsible) === */}
+          {(data.earningsHistory.length > 0 || data.incomeQuarterly.length > 0) && (
+            <div style={{ marginBottom: 12 }}>
+              <SectionHeader keyName="earnings" title="Earnings & Revenue" sub="EPS surprise, quarter-over-quarter revenue, last 4-8 quarters" />
+              {expanded.earnings && (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 12, marginBottom: 12 }}>
+                    {data.earningsHistory.length > 0 && (
+                      <Card style={{ padding: 14 }}>
+                        <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>EPS — Last Quarters (Actual vs Estimate)</div>
+                        <div style={{ height: 180 }}><canvas ref={earningsCanvasRef} /></div>
+                      </Card>
+                    )}
+                    {data.incomeQuarterly.length > 0 && (
+                      <Card style={{ padding: 14 }}>
+                        <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>Revenue — Last Quarters</div>
+                        <div style={{ height: 180 }}><canvas ref={revenueCanvasRef} /></div>
+                      </Card>
+                    )}
+                  </div>
+                  {data.earningsHistory.length > 0 && (
+                    <Card style={{ padding: 14 }}>
+                      <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>Earnings History</div>
+                      <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                        <thead><tr style={{ background: COLORS.bg, textAlign: "left" }}>
+                          <th style={{ padding: "6px 10px" }}>Period</th>
+                          <th style={{ padding: "6px 10px" }}>Quarter</th>
+                          <th style={{ padding: "6px 10px", textAlign: "right" }}>EPS Actual</th>
+                          <th style={{ padding: "6px 10px", textAlign: "right" }}>EPS Estimate</th>
+                          <th style={{ padding: "6px 10px", textAlign: "right" }}>Surprise %</th>
+                        </tr></thead>
+                        <tbody>
+                          {data.earningsHistory.map((e, i) => (
+                            <tr key={i} style={{ borderTop: `1px solid ${COLORS.borderLight}` }}>
+                              <td style={{ padding: "6px 10px" }}>{e.period}</td>
+                              <td style={{ padding: "6px 10px", color: COLORS.textMuted }}>{e.quarter || "—"}</td>
+                              <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 600 }}>${fmtNum(e.epsActual)}</td>
+                              <td style={{ padding: "6px 10px", textAlign: "right", color: COLORS.textMuted }}>${fmtNum(e.epsEstimate)}</td>
+                              <td style={{ padding: "6px 10px", textAlign: "right", color: (e.surprisePct ?? 0) >= 0 ? COLORS.success : COLORS.danger, fontWeight: 600 }}>
+                                {e.surprisePct != null ? (e.surprisePct >= 0 ? "+" : "") + fmtNum(e.surprisePct) + "%" : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </Card>
+                  )}
+                </>
+              )}
+            </div>
           )}
 
-          {/* Upcoming events */}
-          <Card style={{ padding: 14 }}>
-            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>Upcoming Events</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 11, color: COLORS.textMuted }}>Next Earnings</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text }}>{fmtDate(data.nextEarningsDate)}</div>
-                {data.nextEarningsEstimate != null && (
-                  <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>Est. EPS: ${fmtNum(data.nextEarningsEstimate)}</div>
-                )}
-              </div>
-              <div>
-                <div style={{ fontSize: 11, color: COLORS.textMuted }}>Ex-Dividend Date</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text }}>{fmtDate(data.nextDividendDate || data.exDividendDate)}</div>
-                {data.dividendRate != null && (
-                  <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>Rate: ${fmtNum(data.dividendRate)}/yr · Yield: {fmtPct(data.dividendYield)}</div>
-                )}
-              </div>
-            </div>
-          </Card>
+          {/* === Dividend (collapsible) === */}
+          <div style={{ marginBottom: 12 }}>
+            <SectionHeader keyName="dividend" title="Dividend & Upcoming Events" sub="Yield, payout ratio, ex-dividend date, next earnings" />
+            {expanded.dividend && (
+              <Card style={{ padding: 14 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: COLORS.textMuted }}>Dividend Yield</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.text }}>{fmtPct(data.dividendYield)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: COLORS.textMuted }}>Dividend Rate</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.text }}>${fmtNum(data.dividendRate)}/yr</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: COLORS.textMuted }}>Payout Ratio</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.text }}>{fmtPct(data.payoutRatio)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: COLORS.textMuted }}>Ex-Dividend Date</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text }}>{fmtDate(data.nextDividendDate || data.exDividendDate)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: COLORS.textMuted }}>Next Earnings</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text }}>{fmtDate(data.nextEarningsDate)}</div>
+                    {data.nextEarningsEstimate != null && (
+                      <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>Est. EPS: ${fmtNum(data.nextEarningsEstimate)}</div>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            )}
+          </div>
+
+          {/* === Sentiment / Analyst (collapsible) === */}
+          <div style={{ marginBottom: 12 }}>
+            <SectionHeader keyName="sentiment" title="Sentiment & Analyst View" sub="Beta, momentum, recommendations" />
+            {expanded.sentiment && (
+              <Card style={{ padding: 14 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: COLORS.textMuted }}>Beta vs S&P</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.text }}>{fmtNum(data.beta)}</div>
+                    <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 2 }}>1 = market · &gt;1 = more volatile</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: COLORS.textMuted }}>52W Range</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.text }}>
+                      ${fmtNum(data.fiftyTwoWeekLow)} – ${fmtNum(data.fiftyTwoWeekHigh)}
+                    </div>
+                    {data.fiftyTwoWeekHigh && lastPrice && (
+                      <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 2 }}>
+                        {((lastPrice - data.fiftyTwoWeekLow) / (data.fiftyTwoWeekHigh - data.fiftyTwoWeekLow) * 100).toFixed(0)}% of range
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 6 }}>Live sentiment indicators</div>
+                    <div style={{ fontSize: 12, color: COLORS.textMuted, lineHeight: 1.6 }}>
+                      For analyst ratings, target prices, and ownership data, use the <b>⭐ Morningstar</b> button at the top. Real-time analyst consensus and price targets require a paid data feed and aren't available through free APIs.
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+          </div>
         </div>
       )}
     </Modal>
