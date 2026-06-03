@@ -2958,14 +2958,21 @@ const SUB_INDUSTRY_ETFS = {
   XLK: [
     { sym: "SOXX",  name: "Semiconductors" },
     { sym: "SMH",   name: "Semiconductors (VanEck)" },
+    { sym: "PSI",   name: "Semis (Dynamic)" },
     { sym: "IGV",   name: "Software" },
     { sym: "HACK",  name: "Cybersecurity" },
     { sym: "CIBR",  name: "Cybersecurity (First Trust)" },
+    { sym: "BUG",   name: "Cybersecurity (Global X)" },
     { sym: "FDN",   name: "Internet" },
     { sym: "WCLD",  name: "Cloud Computing" },
+    { sym: "SKYY",  name: "Cloud Computing (First Trust)" },
     { sym: "AIQ",   name: "AI & Big Data" },
+    { sym: "BOTZ",  name: "AI & Robotics (Global X)" },
     { sym: "ROBO",  name: "Robotics & AI" },
-    { sym: "FINX",  name: "FinTech" },
+    { sym: "ARKK",  name: "Disruptive Innovation (ARK)" },
+    { sym: "QTUM",  name: "Quantum Computing" },
+    { sym: "BLOK",  name: "Blockchain" },
+    { sym: "BKCH",  name: "Blockchain (Global X)" },
   ],
   XLF: [
     { sym: "KBE",   name: "Banks (Broad)" },
@@ -2975,6 +2982,8 @@ const SUB_INDUSTRY_ETFS = {
     { sym: "KIE",   name: "Insurance (S&P)" },
     { sym: "KCE",   name: "Capital Markets" },
     { sym: "EUFN",  name: "European Financials" },
+    { sym: "FINX",  name: "FinTech" },
+    { sym: "IPAY",  name: "Mobile Payments" },
   ],
   XLV: [
     { sym: "IBB",   name: "Biotech (iShares)" },
@@ -2985,32 +2994,49 @@ const SUB_INDUSTRY_ETFS = {
     { sym: "PJP",   name: "Pharma (Invesco)" },
     { sym: "PPH",   name: "Pharmaceuticals (VanEck)" },
     { sym: "GNOM",  name: "Genomics" },
+    { sym: "ARKG",  name: "Genomic Revolution (ARK)" },
+    { sym: "IDNA",  name: "Genomics & Immunology" },
+    { sym: "EDOC",  name: "Telemedicine & Digital Health" },
   ],
   XLY: [
     { sym: "XRT",   name: "Retail" },
+    { sym: "RTH",   name: "Retail (VanEck)" },
     { sym: "FXD",   name: "Discretionary (1st Trust)" },
     { sym: "PEJ",   name: "Leisure & Entertainment" },
+    { sym: "AWAY",  name: "Travel & Vacation" },
     { sym: "CARZ",  name: "Auto Industry" },
+    { sym: "DRIV",  name: "Electric Vehicles & Driving Tech" },
     { sym: "PEZ",   name: "Discretionary (Equal Wt)" },
+    { sym: "ONLN",  name: "Online Retail" },
+    { sym: "IBUY",  name: "E-Commerce" },
   ],
   XLC: [
     { sym: "SOCL",  name: "Social Media" },
     { sym: "ESPO",  name: "Video Games & eSports" },
+    { sym: "HERO",  name: "Video Games (Global X)" },
+    { sym: "GAMR",  name: "Video Game Tech (Wedbush)" },
     { sym: "PBS",   name: "Media (Dynamic)" },
-    { sym: "FDN",   name: "Internet" },
+    { sym: "METV",  name: "Metaverse" },
   ],
   XLI: [
     { sym: "ITA",   name: "Aerospace & Defense" },
+    { sym: "XAR",   name: "Aerospace & Defense (SPDR)" },
+    { sym: "PPA",   name: "Aerospace & Defense (Invesco)" },
     { sym: "JETS",  name: "Airlines" },
     { sym: "IYT",   name: "Transportation" },
-    { sym: "XAR",   name: "Aerospace & Defense (SPDR)" },
     { sym: "PKB",   name: "Building & Construction" },
     { sym: "FXR",   name: "Industrials (1st Trust)" },
+    { sym: "PAVE",  name: "US Infrastructure Builders" },
+    { sym: "IFRA",  name: "US Infrastructure" },
+    { sym: "UFO",   name: "Space Industry" },
+    { sym: "ROKT",  name: "Space Industry (Procure)" },
   ],
   XLP: [
     { sym: "PBJ",   name: "Food & Beverage" },
     { sym: "FXG",   name: "Staples (1st Trust)" },
     { sym: "PSL",   name: "Staples (Equal Wt)" },
+    { sym: "MOO",   name: "Agribusiness" },
+    { sym: "COW",   name: "Livestock (iPath)" },
   ],
   XLE: [
     { sym: "XOP",   name: "Oil & Gas Exploration" },
@@ -3018,14 +3044,19 @@ const SUB_INDUSTRY_ETFS = {
     { sym: "PXE",   name: "Energy Explorers" },
     { sym: "FCG",   name: "Natural Gas" },
     { sym: "ICLN",  name: "Clean Energy" },
+    { sym: "QCLN",  name: "Clean Energy (Nasdaq)" },
     { sym: "TAN",   name: "Solar" },
     { sym: "FAN",   name: "Wind Energy" },
     { sym: "URA",   name: "Uranium" },
+    { sym: "URNM",  name: "Uranium Miners (Sprott)" },
+    { sym: "HJEN",  name: "Hydrogen Economy" },
+    { sym: "HDRO",  name: "Hydrogen (Defiance)" },
   ],
   XLU: [
     { sym: "JXI",   name: "Global Utilities" },
     { sym: "FXU",   name: "Utilities (1st Trust)" },
     { sym: "PUI",   name: "Utilities (Dynamic)" },
+    { sym: "GRID",  name: "Smart Grid Infrastructure" },
   ],
   XLRE: [
     { sym: "VNQ",   name: "US REITs (Vanguard)" },
@@ -3033,15 +3064,23 @@ const SUB_INDUSTRY_ETFS = {
     { sym: "REM",   name: "Mortgage REITs" },
     { sym: "PSR",   name: "Active US REITs" },
     { sym: "FREL",  name: "Real Estate (1st Trust)" },
+    { sym: "INDS",  name: "Industrial REITs" },
+    { sym: "SRVR",  name: "Data Center & Tower REITs" },
   ],
   XLB: [
     { sym: "GDX",   name: "Gold Miners" },
     { sym: "GDXJ",  name: "Junior Gold Miners" },
     { sym: "SIL",   name: "Silver Miners" },
+    { sym: "SILJ",  name: "Junior Silver Miners" },
     { sym: "COPX",  name: "Copper Miners" },
     { sym: "LIT",   name: "Lithium & Battery Tech" },
     { sym: "REMX",  name: "Rare Earth & Strategic" },
     { sym: "SLX",   name: "Steel Producers" },
+    { sym: "PHO",   name: "Water Resources (Invesco)" },
+    { sym: "FIW",   name: "Water Resources (First Trust)" },
+    { sym: "WOOD",  name: "Timber & Forestry" },
+    { sym: "MJ",    name: "Cannabis (ETFMG)" },
+    { sym: "MSOS",  name: "US Cannabis (AdvisorShares)" },
   ],
 };
 
@@ -3156,6 +3195,33 @@ const ViewSwitcher = ({ actualUser, viewAs, setViewAs }) => {
 // earningsHistory, earningsTrend, incomeStatementHistoryQuarterly,
 // financialData, calendarEvents
 // ============================================================
+// ============================================================
+// Yahoo topHoldings — for ETFs, returns top 10 holdings with weights.
+// Yahoo doesn't always return this; failures are non-fatal.
+// ============================================================
+async function fetchETFHoldings(symbol) {
+  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=topHoldings`;
+  try {
+    const json = await fetchThroughProxies(url, { expectJSON: true, timeoutMs: 8000 });
+    const r = json?.quoteSummary?.result?.[0]?.topHoldings;
+    if (!r) return null;
+    const u = (obj) => obj && typeof obj === "object" && "raw" in obj ? obj.raw : (obj ?? null);
+    return {
+      holdings: (r.holdings || []).map(h => ({
+        symbol: h.symbol,
+        name: typeof h.holdingName === "string" ? h.holdingName : u(h.holdingName),
+        weight: u(h.holdingPercent),
+      })),
+      sectorWeights: (r.sectorWeightings || []).map(s => {
+        const entries = Object.entries(s)[0] || [];
+        return { name: entries[0], weight: u(entries[1]) };
+      }),
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 async function fetchYahooQuoteSummary(symbol) {
   // Yahoo's quoteSummary can be picky — if you request a module that
   // doesn't apply to the security type (e.g. earningsHistory on an ETF),
@@ -3563,6 +3629,7 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
   const [econCalendar, setEconCalendar] = useState(DEFAULT_ECON_CALENDAR);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [refreshMinutes, setRefreshMinutes] = useState(5);   // user-controlled
+  const [overviewTab, setOverviewTab] = useState("signal");  // "signal" | "drawdowns" | "indices"
   const [refreshTick, setRefreshTick] = useState(0);
   const [fetchError, setFetchError] = useState(null);
 
@@ -3961,8 +4028,46 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
               </Card>
             )}
 
+            {/* Sub-tab switcher */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 16, padding: 4, background: COLORS.bg, borderRadius: 10, flexWrap: "wrap" }}>
+              {[
+                { key: "signal", label: "PointerOS Signal", icon: "●" },
+                { key: "drawdowns", label: "Drawdown Scanner", icon: "▼" },
+                { key: "indices", label: "Indices & Sectors", icon: "≡" },
+              ].map(t => (
+                <button key={t.key} onClick={() => setOverviewTab(t.key)}
+                  style={{
+                    flex: "1 1 200px",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    border: "none",
+                    background: overviewTab === t.key ? COLORS.surface : "transparent",
+                    color: overviewTab === t.key ? COLORS.primaryDark : COLORS.textMuted,
+                    fontWeight: overviewTab === t.key ? 700 : 500,
+                    fontSize: 13,
+                    fontFamily: "inherit",
+                    cursor: "pointer",
+                    boxShadow: overviewTab === t.key ? "0 2px 6px rgba(0,0,0,0.08)" : "none",
+                    transition: "all 0.15s",
+                  }}>
+                  <span style={{ marginRight: 6, opacity: 0.8 }}>{t.icon}</span> {t.label}
+                </button>
+              ))}
+            </div>
+
             {/* PointerOS Signal — top dislocations & momentum */}
-            <PointerOSSignal onOpenSector={(s) => setSectorDetail(s)} onOpenStock={(sym) => setStockDetailSymbol(sym)} />
+            {overviewTab === "signal" && (
+              <PointerOSSignal onOpenSector={(s) => setSectorDetail(s)} onOpenStock={(sym) => setStockDetailSymbol(sym)} />
+            )}
+
+            {/* Drawdown Scanner — all sub-industries with drawdown analysis */}
+            {overviewTab === "drawdowns" && (
+              <DrawdownScanner onOpenSector={(s) => setSectorDetail(s)} onOpenStock={(sym) => setStockDetailSymbol(sym)} />
+            )}
+
+            {/* Indices & sector heatmap shown only on the "indices" tab */}
+            {overviewTab === "indices" && (
+              <>
 
             {/* Live indices */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 16 }}>
@@ -4160,6 +4265,8 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
                 })()}
               </Card>
             </div>
+            </>
+            )}
           </div>
         )}
 
@@ -4695,6 +4802,361 @@ function EconCalendarEditor({ calendar, setCalendar, onBack }) {
 // Uses z-scores vs the universe mean for "dislocation."
 // This is a quantitative signal, not investment advice.
 // ============================================================
+// ============================================================
+// DRAWDOWN SCANNER — peak-to-trough drawdowns + current % off high
+// Scans all sub-industry ETFs across selectable lookback windows.
+// Surfaces deep-value / oversold candidates ranked by drawdown.
+// ============================================================
+function DrawdownScanner({ onOpenSector, onOpenStock }) {
+  const [windowKey, setWindowKey] = useState("18mo"); // selectable
+  const [parentFilter, setParentFilter] = useState("ALL");
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: ALL_SUB_INDUSTRIES.length });
+  const [error, setError] = useState(null);
+  const [sortBy, setSortBy] = useState("currentDD"); // currentDD | peakDD | windowRet | dd52w
+  const [holdingsFor, setHoldingsFor] = useState(null); // ETF symbol whose holdings are shown
+  const [holdingsData, setHoldingsData] = useState(null);
+  const [holdingsLoading, setHoldingsLoading] = useState(false);
+
+  // Window definitions: Yahoo range + how many trading days that represents
+  const WINDOWS = {
+    "1mo":  { yahoo: "1mo",  label: "1 Month",   tradingDays: 21 },
+    "3mo":  { yahoo: "3mo",  label: "3 Months",  tradingDays: 63 },
+    "6mo":  { yahoo: "6mo",  label: "6 Months",  tradingDays: 126 },
+    "1y":   { yahoo: "1y",   label: "1 Year",    tradingDays: 252 },
+    "18mo": { yahoo: "2y",   label: "18 Months", tradingDays: 378 },  // use 2y range, slice
+    "2y":   { yahoo: "2y",   label: "2 Years",   tradingDays: 504 },
+  };
+
+  const runScan = useCallback(async () => {
+    setLoading(true); setError(null);
+    setProgress({ done: 0, total: ALL_SUB_INDUSTRIES.length });
+    const win = WINDOWS[windowKey];
+    try {
+      const out = [];
+      let done = 0;
+      // Always fetch 1y too for the 52W high/low column
+      for (const item of ALL_SUB_INDUSTRIES) {
+        try {
+          const [windowData, oneYr] = await Promise.all([
+            fetchYahoo(item.sym, win.yahoo, "1d").catch(() => null),
+            (win.yahoo === "1y") ? Promise.resolve(null) : fetchYahoo(item.sym, "1y", "1d").catch(() => null),
+          ]);
+          if (windowData) {
+            const closes = windowData.closes.filter(c => c !== null);
+            const ts = (windowData.ts || []).filter((_, i) => windowData.closes[i] !== null);
+            if (closes.length >= 2) {
+              // Trim to exact trading-day window if longer (e.g., 18mo from 2y data)
+              const slicedCloses = closes.length > win.tradingDays
+                ? closes.slice(closes.length - win.tradingDays)
+                : closes;
+              const slicedTs = ts.length > win.tradingDays
+                ? ts.slice(ts.length - win.tradingDays)
+                : ts;
+
+              const last = slicedCloses[slicedCloses.length - 1];
+              const start = slicedCloses[0];
+              const peak = Math.max(...slicedCloses);
+              const trough = Math.min(...slicedCloses);
+              const peakIdx = slicedCloses.indexOf(peak);
+              const troughIdx = slicedCloses.indexOf(trough);
+
+              const windowRet = ((last - start) / start) * 100;
+              // Peak-to-trough drawdown = worst drawdown in the window
+              // We compute the max drawdown by walking the series
+              let runningMax = slicedCloses[0];
+              let maxDD = 0;
+              let maxDDStart = null, maxDDEnd = null;
+              let curMaxStart = 0;
+              for (let i = 0; i < slicedCloses.length; i++) {
+                if (slicedCloses[i] > runningMax) {
+                  runningMax = slicedCloses[i];
+                  curMaxStart = i;
+                }
+                const dd = (slicedCloses[i] - runningMax) / runningMax * 100;
+                if (dd < maxDD) {
+                  maxDD = dd;
+                  maxDDStart = curMaxStart;
+                  maxDDEnd = i;
+                }
+              }
+              // Current DD from window peak
+              const currentDD = ((last - peak) / peak) * 100;
+
+              // 52-week stats from oneYr if available, else fall back to window data
+              const yrData = oneYr || windowData;
+              const yrCloses = yrData.closes.filter(c => c !== null);
+              const fiftyTwoHigh = yrCloses.length ? Math.max(...yrCloses) : peak;
+              const fiftyTwoLow = yrCloses.length ? Math.min(...yrCloses) : trough;
+              const dd52w = ((last - fiftyTwoHigh) / fiftyTwoHigh) * 100;
+
+              out.push({
+                ...item,
+                last,
+                peak,
+                trough,
+                peakDate: slicedTs[peakIdx] ? new Date(slicedTs[peakIdx] * 1000) : null,
+                troughDate: slicedTs[troughIdx] ? new Date(slicedTs[troughIdx] * 1000) : null,
+                windowRet,
+                currentDD,
+                maxDD,
+                maxDDStart: maxDDStart != null && slicedTs[maxDDStart] ? new Date(slicedTs[maxDDStart] * 1000) : null,
+                maxDDEnd: maxDDEnd != null && slicedTs[maxDDEnd] ? new Date(slicedTs[maxDDEnd] * 1000) : null,
+                fiftyTwoHigh, fiftyTwoLow, dd52w,
+              });
+            }
+          }
+        } catch (e) { /* skip */ }
+        done++;
+        setProgress({ done, total: ALL_SUB_INDUSTRIES.length });
+      }
+      setResults(out);
+    } catch (e) {
+      setError(e.message);
+    }
+    setLoading(false);
+  }, [windowKey]);
+
+  useEffect(() => { runScan(); }, [runScan]);
+
+  // Sort and filter
+  const filtered = results.filter(r => parentFilter === "ALL" || r.parent === parentFilter);
+  const sorted = [...filtered].sort((a, b) => {
+    switch (sortBy) {
+      case "currentDD": return (a.currentDD ?? 0) - (b.currentDD ?? 0);  // most-negative first
+      case "peakDD":    return (a.maxDD ?? 0) - (b.maxDD ?? 0);
+      case "windowRet": return (a.windowRet ?? 0) - (b.windowRet ?? 0);
+      case "dd52w":     return (a.dd52w ?? 0) - (b.dd52w ?? 0);
+      default: return 0;
+    }
+  });
+
+  const parentName = (p) => SECTOR_ETFS.find(s => s.sym === p)?.name || p;
+  const fmtPct = (n) => n == null ? "—" : (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
+  const heatColor = (pct) => {
+    if (pct == null) return "#9CA3AF";
+    if (pct >= 0) return "#1FB67D";
+    if (pct >= -5) return "#86EFAC";
+    if (pct >= -10) return "#FCD34D";
+    if (pct >= -20) return "#FB923C";
+    if (pct >= -35) return "#DC2626";
+    return "#7F1D1D";
+  };
+
+  // Holdings drill-in
+  const showHoldings = async (symbol) => {
+    setHoldingsFor(symbol);
+    setHoldingsLoading(true);
+    setHoldingsData(null);
+    const h = await fetchETFHoldings(symbol);
+    setHoldingsData(h);
+    setHoldingsLoading(false);
+  };
+
+  return (
+    <Card style={{ padding: 18, marginBottom: 16, background: COLORS.surface, borderTop: `3px solid ${COLORS.danger}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: COLORS.danger }} />
+            <div style={{ fontSize: 11, color: COLORS.danger, textTransform: "uppercase", letterSpacing: 2, fontWeight: 700 }}>PointerOS Drawdown Scanner</div>
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>Peak-to-Trough · Current Drawdown · 52W Off-High</div>
+          <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4, lineHeight: 1.5, maxWidth: 720 }}>
+            Scans all {ALL_SUB_INDUSTRIES.length} sub-industry ETFs across a selectable lookback. <b>"Current DD"</b> = % off the window peak. <b>"Peak DD"</b> = worst drawdown anywhere in the window. <b>"52W Off-High"</b> = current price vs trailing 52-week high. Deep negatives may indicate value opportunities — verify fundamentals.
+          </div>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+        <div>
+          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>Window</div>
+          <select value={windowKey} onChange={e => setWindowKey(e.target.value)}
+            style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", background: COLORS.surface, fontWeight: 600 }}>
+            {Object.entries(WINDOWS).map(([key, w]) => (
+              <option key={key} value={key}>{w.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>Sector Filter</div>
+          <select value={parentFilter} onChange={e => setParentFilter(e.target.value)}
+            style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", background: COLORS.surface }}>
+            <option value="ALL">All sectors ({results.length})</option>
+            {SECTOR_ETFS.map(s => {
+              const count = results.filter(r => r.parent === s.sym).length;
+              return <option key={s.sym} value={s.sym}>{s.name} ({count})</option>;
+            })}
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>Sort By</div>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+            style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", background: COLORS.surface }}>
+            <option value="currentDD">Current DD (deepest first)</option>
+            <option value="peakDD">Peak-to-Trough DD (worst first)</option>
+            <option value="dd52w">52W Off-High (deepest first)</option>
+            <option value="windowRet">Window Return (worst first)</option>
+          </select>
+        </div>
+        <div style={{ marginLeft: "auto" }}>
+          <Button size="sm" variant="ghost" onClick={runScan} disabled={loading}>
+            {loading ? `Scanning ${progress.done}/${progress.total}…` : "↻ Rescan"}
+          </Button>
+        </div>
+      </div>
+
+      {error && (
+        <div style={{ padding: 10, background: COLORS.danger + "11", borderRadius: 6, fontSize: 12, color: COLORS.danger, marginBottom: 12 }}>
+          Scan error: {error}
+        </div>
+      )}
+
+      {/* Progress bar */}
+      {loading && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ height: 4, background: COLORS.bg, borderRadius: 2, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${(progress.done / progress.total) * 100}%`, background: COLORS.primary, transition: "width 0.2s" }} />
+          </div>
+          <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>
+            Scanned {progress.done} of {progress.total} ETFs · ~{Math.max(0, Math.ceil((progress.total - progress.done) * 0.6))}s remaining
+          </div>
+        </div>
+      )}
+
+      {/* Results table */}
+      {!loading && sorted.length === 0 ? (
+        <div style={{ padding: 30, textAlign: "center", color: COLORS.textMuted, fontSize: 13 }}>
+          No results. Try a different filter or rescan.
+        </div>
+      ) : sorted.length > 0 && (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse", minWidth: 900 }}>
+            <thead>
+              <tr style={{ background: COLORS.bg, textAlign: "left" }}>
+                <th style={{ padding: "10px", position: "sticky", left: 0, background: COLORS.bg }}>ETF</th>
+                <th style={{ padding: "10px" }}>Industry</th>
+                <th style={{ padding: "10px" }}>Sector</th>
+                <th style={{ padding: "10px", textAlign: "right" }}>Last</th>
+                <th style={{ padding: "10px", textAlign: "right" }}>{WINDOWS[windowKey].label} Return</th>
+                <th style={{ padding: "10px", textAlign: "right" }}>Current DD</th>
+                <th style={{ padding: "10px", textAlign: "right" }}>Peak-to-Trough DD</th>
+                <th style={{ padding: "10px", textAlign: "right" }}>52W Off-High</th>
+                <th style={{ padding: "10px" }}>Holdings</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map(r => (
+                <tr key={r.sym} style={{ borderTop: `1px solid ${COLORS.borderLight}` }}>
+                  <td style={{ padding: "8px 10px", position: "sticky", left: 0, background: COLORS.surface }}>
+                    <TickerAction symbol={r.sym} onOpenDetail={onOpenStock} style={{ fontSize: 12 }} />
+                  </td>
+                  <td style={{ padding: "8px 10px" }}>{r.name}</td>
+                  <td style={{ padding: "8px 10px" }}>
+                    <button onClick={() => { const sObj = SECTOR_ETFS.find(s => s.sym === r.parent); if (sObj) onOpenSector(sObj); }}
+                      style={{ background: "none", border: "none", padding: 0, fontFamily: "inherit", fontSize: 11, color: COLORS.primary, cursor: "pointer", textDecoration: "underline" }}>
+                      {parentName(r.parent)}
+                    </button>
+                  </td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", color: COLORS.textMuted }}>${r.last.toFixed(2)}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right" }}>
+                    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, background: heatColor(r.windowRet), color: "white", fontWeight: 700, minWidth: 64, textAlign: "center" }}>{fmtPct(r.windowRet)}</span>
+                  </td>
+                  <td style={{ padding: "8px 10px", textAlign: "right" }}>
+                    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, background: heatColor(r.currentDD), color: "white", fontWeight: 700, minWidth: 64, textAlign: "center" }}>{fmtPct(r.currentDD)}</span>
+                  </td>
+                  <td style={{ padding: "8px 10px", textAlign: "right" }}>
+                    <div>
+                      <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, background: heatColor(r.maxDD), color: "white", fontWeight: 700, minWidth: 64, textAlign: "center" }}>{fmtPct(r.maxDD)}</span>
+                    </div>
+                    {r.maxDDStart && r.maxDDEnd && (
+                      <div style={{ fontSize: 9, color: COLORS.textDim, marginTop: 2 }}>
+                        {r.maxDDStart.toLocaleDateString([], { month: "short", year: "2-digit" })} → {r.maxDDEnd.toLocaleDateString([], { month: "short", year: "2-digit" })}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ padding: "8px 10px", textAlign: "right" }}>
+                    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, background: heatColor(r.dd52w), color: "white", fontWeight: 700, minWidth: 64, textAlign: "center" }}>{fmtPct(r.dd52w)}</span>
+                  </td>
+                  <td style={{ padding: "8px 10px" }}>
+                    <button onClick={() => showHoldings(r.sym)}
+                      style={{ background: "none", border: `1px solid ${COLORS.border}`, padding: "3px 8px", borderRadius: 4, fontFamily: "inherit", fontSize: 11, color: COLORS.text, cursor: "pointer" }}>
+                      Top 10 →
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div style={{ marginTop: 12, padding: 10, background: COLORS.bg, borderRadius: 6, fontSize: 11, color: COLORS.textDim, lineHeight: 1.5 }}>
+        Window: <b style={{ color: COLORS.text }}>{WINDOWS[windowKey].label}</b> · ETFs in scan: <b style={{ color: COLORS.text }}>{ALL_SUB_INDUSTRIES.length}</b> · Showing: <b style={{ color: COLORS.text }}>{sorted.length}</b>. Click 📊 for in-app fundamentals, ↗ for Morningstar, or sector name for sub-industry breakdown.
+      </div>
+
+      {/* Holdings modal */}
+      <Modal open={!!holdingsFor} onClose={() => { setHoldingsFor(null); setHoldingsData(null); }} title={holdingsFor ? `${holdingsFor} — Top Holdings` : ""}>
+        {holdingsLoading && <div style={{ padding: 30, textAlign: "center", color: COLORS.textMuted, fontSize: 13 }}>Loading holdings…</div>}
+        {!holdingsLoading && !holdingsData && (
+          <div style={{ padding: 20, background: COLORS.gold + "15", borderRadius: 8, fontSize: 13, color: COLORS.text }}>
+            Holdings data not available for this ETF. <a href={morningstarUrl(holdingsFor)} target="_blank" rel="noopener" style={{ color: COLORS.primary, fontWeight: 600 }}>View on Morningstar →</a>
+          </div>
+        )}
+        {!holdingsLoading && holdingsData && (
+          <div>
+            {holdingsData.holdings && holdingsData.holdings.length > 0 ? (
+              <Card style={{ padding: 14, marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>Top 10 Holdings</div>
+                <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                  <thead><tr style={{ background: COLORS.bg, textAlign: "left" }}>
+                    <th style={{ padding: "6px 10px" }}>Ticker</th>
+                    <th style={{ padding: "6px 10px" }}>Name</th>
+                    <th style={{ padding: "6px 10px", textAlign: "right" }}>Weight</th>
+                  </tr></thead>
+                  <tbody>
+                    {holdingsData.holdings.map((h, i) => (
+                      <tr key={i} style={{ borderTop: `1px solid ${COLORS.borderLight}` }}>
+                        <td style={{ padding: "6px 10px" }}>
+                          <TickerAction symbol={h.symbol} onOpenDetail={(s) => { setHoldingsFor(null); onOpenStock && onOpenStock(s); }} style={{ fontSize: 12 }} />
+                        </td>
+                        <td style={{ padding: "6px 10px" }}>{h.name}</td>
+                        <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700 }}>{h.weight != null ? (h.weight * 100).toFixed(2) + "%" : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+            ) : (
+              <div style={{ padding: 14, fontSize: 12, color: COLORS.textMuted }}>No holdings returned by Yahoo for this ETF.</div>
+            )}
+            {holdingsData.sectorWeights && holdingsData.sectorWeights.length > 0 && (
+              <Card style={{ padding: 14 }}>
+                <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontWeight: 600 }}>Sector Breakdown</div>
+                <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                  <tbody>
+                    {holdingsData.sectorWeights.map((s, i) => (
+                      <tr key={i} style={{ borderTop: i === 0 ? "none" : `1px solid ${COLORS.borderLight}` }}>
+                        <td style={{ padding: "6px 10px", textTransform: "capitalize" }}>{s.name?.replace(/_/g, " ")}</td>
+                        <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700 }}>{s.weight != null ? (s.weight * 100).toFixed(2) + "%" : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+            )}
+            <div style={{ marginTop: 12, fontSize: 11, color: COLORS.textDim, textAlign: "center" }}>
+              Data from Yahoo's topHoldings endpoint · last updated quarterly by fund issuer
+            </div>
+          </div>
+        )}
+      </Modal>
+    </Card>
+  );
+}
+
 function PointerOSSignal({ onOpenSector, onOpenStock }) {
   const [scanResults, setScanResults] = useState(null);
   const [loading, setLoading] = useState(true);
