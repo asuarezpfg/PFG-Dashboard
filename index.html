@@ -14,6 +14,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
@@ -26,6 +28,18 @@ window.storage = {
 </script>
 <script type="text/babel" data-type="module">
 const { useState, useEffect, useCallback, useRef, useMemo } = React;
+
+// Register chartjs-plugin-zoom globally so any Chart instance can use it.
+// The plugin attaches itself to window.ChartZoom (or similar) when loaded via CDN.
+// In chart.js v3+, we must explicitly register it.
+if (typeof window !== "undefined" && window.Chart) {
+  // The plugin's UMD build exposes itself as a global; Chart.register accepts it.
+  // Different builds expose under different names — try the common ones.
+  const zoomPlugin = window.ChartZoom || window.chartjsPluginZoom || window["chartjs-plugin-zoom"];
+  if (zoomPlugin) {
+    try { window.Chart.register(zoomPlugin); } catch (e) { console.warn("Zoom plugin registration:", e.message); }
+  }
+}
 
 // ============================================================
 // 401(k) Plan CRM - Full Application
@@ -479,6 +493,88 @@ const COLORS = {
   segC: "#EAC82E",
   segSIM: "#7C3AED",
 };
+
+// ============================================================
+// CHART INTERACTION HELPERS
+// Reusable Chart.js option fragments for: crosshair hover tooltip,
+// drag-to-zoom, mouse-wheel zoom, and reset-zoom plugin.
+// ============================================================
+
+// Crosshair vertical line drawn through hovered point.
+// Registered as an inline plugin per-chart so it doesn't bleed across charts.
+const crosshairPlugin = {
+  id: "pfgCrosshair",
+  afterDraw: (chart) => {
+    const active = chart.tooltip?._active || chart.tooltip?.dataPoints;
+    if (!active || active.length === 0) return;
+    const ctx = chart.ctx;
+    const x = active[0].element ? active[0].element.x : active[0].x;
+    if (x == null) return;
+    const top = chart.chartArea.top;
+    const bottom = chart.chartArea.bottom;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "#0B285388";
+    ctx.setLineDash([4, 3]);
+    ctx.stroke();
+    ctx.restore();
+  },
+};
+
+// Standard interactive options for a line price chart.
+// Pass `priceFormat: true` to format Y-axis as dollars.
+function interactiveLineOptions({ priceFormat = false, customTooltip = null } = {}) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: "index", intersect: false, axis: "x" },
+    scales: {
+      y: { ticks: { callback: priceFormat ? (v) => "$" + v.toFixed(0) : (v) => v.toFixed(2) } },
+      x: { ticks: { maxTicksLimit: 8 } },
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        enabled: true,
+        backgroundColor: "rgba(11, 40, 83, 0.95)",
+        titleColor: "#FFF",
+        bodyColor: "#FFF",
+        borderColor: "#2FACEA",
+        borderWidth: 1,
+        padding: 10,
+        cornerRadius: 6,
+        displayColors: false,
+        callbacks: customTooltip || {
+          label: (ctx) => {
+            if (priceFormat) return "$" + Number(ctx.raw).toFixed(2);
+            return Number(ctx.raw).toFixed(2) + "%";
+          },
+        },
+      },
+      zoom: {
+        pan: { enabled: true, mode: "x", modifierKey: "shift" },
+        zoom: {
+          drag: {
+            enabled: true,
+            backgroundColor: "rgba(47, 172, 234, 0.15)",
+            borderColor: "rgba(47, 172, 234, 0.6)",
+            borderWidth: 1,
+            threshold: 5,
+          },
+          wheel: { enabled: true, modifierKey: "ctrl" },
+          pinch: { enabled: true },
+          mode: "x",
+        },
+        limits: {
+          x: { minRange: 5 * 24 * 60 * 60 * 1000 },  // min 5-day zoom range
+        },
+      },
+    },
+  };
+}
 
 const segColor = (s) => ({ A: COLORS.segA, B: COLORS.segB, C: COLORS.segC, SIM: COLORS.segSIM }[s] || COLORS.textMuted);
 
@@ -1075,6 +1171,15 @@ function App() {
               <div style={{ fontSize: 13, color: COLORS.textMuted, lineHeight: 1.5 }}>Profiles, PTO tracking, reimbursements, master calendar with birthdays and events.</div>
               <Badge color={COLORS.success} style={{ marginTop: 12 }}>Active</Badge>
             </div>
+            {/* Active: Risk Profile */}
+            <div onClick={() => setSelectedApp("risk")} style={{ background: COLORS.surface, borderRadius: 16, border: `1px solid ${COLORS.gold}66`, padding: 32, cursor: "pointer", transition: "all 0.2s", position: "relative", overflow: "hidden" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = COLORS.gold; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(234,200,46,0.18)"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = COLORS.gold + "66"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}>
+              <div style={{ fontSize: 28, marginBottom: 12 }}>🎯</div>
+              <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Risk Profile</div>
+              <div style={{ fontSize: 13, color: COLORS.textMuted, lineHeight: 1.5 }}>Emotional, narrative-driven risk tolerance questionnaire. Use in client meetings, generate summary email.</div>
+              <Badge color={COLORS.gold} style={{ marginTop: 12, color: "#0B2853" }}>Active</Badge>
+            </div>
           </div>
           <div style={{ textAlign: "center", marginTop: 32 }}>
             <button onClick={() => { setCurrentUser(null); setSelectedApp(null); }} style={{ background: "none", border: "none", color: COLORS.textDim, fontSize: 12, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -1094,6 +1199,11 @@ function App() {
   // --- HR Toolsuite Module ---
   if (selectedApp === "hr") {
     return <HRToolsuiteApp currentUser={effectiveUser} actualUser={currentUser} viewAs={viewAs} setViewAs={setViewAs} people={people} onUpdatePeople={updatePeople} onExit={() => setSelectedApp(null)} />;
+  }
+
+  // --- Risk Profile Toolsuite ---
+  if (selectedApp === "risk") {
+    return <RiskProfileToolsuite currentUser={effectiveUser} onExit={() => setSelectedApp(null)} />;
   }
 
   const selectedPlan = plans.find(p => p.id === selectedPlanId);
@@ -2856,18 +2966,75 @@ async function fetchThroughProxies(targetUrl, opts = {}) {
   throw err;
 }
 
-async function fetchYahoo(symbol, range = "ytd", interval = "1d") {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=${range}&interval=${interval}`;
-  const json = await fetchThroughProxies(url, { expectJSON: true });
-  if (!json?.chart?.result?.[0]) {
-    throw new Error("Yahoo returned no chart data for " + symbol);
+// ============================================================
+// IN-MEMORY DATA CACHE
+// Reduces redundant Yahoo/FRED calls when components remount or
+// share data needs. Keys are namespaced per-fetcher. TTL is per-key.
+//   - Chart series: 5 minutes (price data settles slowly)
+//   - Batch quotes: 30 seconds (live updates)
+//   - FRED series: 1 hour (macro data updates daily at most)
+//   - quoteSummary: 5 minutes
+//   - ETF holdings: 1 day
+// Setting localStorage flag "pfg-debug-cache" = "1" logs hits/misses.
+// ============================================================
+const pfgCache = new Map();
+const pfgInflight = new Map();    // dedupe concurrent requests for same key
+function cacheGet(key) {
+  const entry = pfgCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    pfgCache.delete(key);
+    return null;
   }
-  const r = json.chart.result[0];
-  return {
-    closes: r.indicators?.quote?.[0]?.close || [],
-    ts: r.timestamp || [],
-    meta: r.meta || {},
-  };
+  if (typeof localStorage !== "undefined" && localStorage.getItem("pfg-debug-cache") === "1") {
+    console.log("[cache HIT]", key);
+  }
+  return entry.value;
+}
+function cacheSet(key, value, ttlMs) {
+  pfgCache.set(key, { value, expiresAt: Date.now() + ttlMs });
+}
+async function cached(key, ttlMs, fn) {
+  const hit = cacheGet(key);
+  if (hit !== null) return hit;
+  // Dedupe in-flight requests for the same key
+  if (pfgInflight.has(key)) {
+    return pfgInflight.get(key);
+  }
+  if (typeof localStorage !== "undefined" && localStorage.getItem("pfg-debug-cache") === "1") {
+    console.log("[cache MISS]", key);
+  }
+  const promise = (async () => {
+    try {
+      const val = await fn();
+      cacheSet(key, val, ttlMs);
+      return val;
+    } finally {
+      pfgInflight.delete(key);
+    }
+  })();
+  pfgInflight.set(key, promise);
+  return promise;
+}
+// Expose to window for manual clearing in console
+if (typeof window !== "undefined") {
+  window.pfgClearCache = () => { pfgCache.clear(); pfgInflight.clear(); console.log("Cache cleared."); };
+}
+
+async function fetchYahoo(symbol, range = "ytd", interval = "1d") {
+  return cached(`yahoo:${symbol}:${range}:${interval}`, 5 * 60 * 1000, async () => {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=${range}&interval=${interval}`;
+    const json = await fetchThroughProxies(url, { expectJSON: true });
+    if (!json?.chart?.result?.[0]) {
+      throw new Error("Yahoo returned no chart data for " + symbol);
+    }
+    const r = json.chart.result[0];
+    return {
+      closes: r.indicators?.quote?.[0]?.close || [],
+      ts: r.timestamp || [],
+      meta: r.meta || {},
+    };
+  });
 }
 
 // Batch quote fetcher: pulls many tickers in a single request.
@@ -2875,7 +3042,9 @@ async function fetchYahoo(symbol, range = "ytd", interval = "1d") {
 // Falls back to individual fetchYahoo calls if the batch endpoint fails.
 async function fetchYahooBatch(symbols) {
   if (!symbols.length) return {};
-  const out = {};
+  const cacheKey = `yahooBatch:${[...symbols].sort().join(",")}`;
+  return cached(cacheKey, 30 * 1000, async () => {
+    const out = {};
   // Yahoo's v7 quote endpoint supports comma-separated symbols.
   // Some proxies/edge versions block v7, so we try, and on failure split into chart calls.
   const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(","))}`;
@@ -2924,7 +3093,8 @@ async function fetchYahooBatch(symbols) {
       } catch (e2) { /* skip */ }
     }
     return out;
-  }
+   }
+  });
 }
 
 const BENCHMARKS = [
@@ -3102,6 +3272,181 @@ const ALL_SUB_INDUSTRIES = Object.entries(SUB_INDUSTRY_ETFS).flatMap(([parent, i
   items.map(i => ({ ...i, parent }))
 );
 
+// ============================================================
+// RECESSION MONITOR INDICATORS
+// 12 indicators across 3 categories, sourced from FRED.
+// Each has: id, label, category, FRED series ID, transform (how to compute the
+// "signal value" — usually YoY change), and default thresholds.
+//
+// Status rule:
+//   - "good" (Expansion):  value passes the expansion threshold
+//   - "caution" (Caution): borderline
+//   - "bad" (Recession):   crossed the recession threshold
+//
+// Direction matters: for "higher = better" indicators (housing permits trending
+// up, jobless claims trending DOWN, wage growth UP, etc.), we flip the logic.
+// We encode this via `goodWhen: "above"` or `"below"`.
+//
+// Thresholds are owner-editable and saved to localStorage under "pfg-recession-thresholds-v1".
+// ============================================================
+const RECESSION_INDICATORS = [
+  // === CONSUMER ===
+  {
+    id: "permits",
+    label: "Housing Permits",
+    category: "Consumer",
+    series: "PERMIT",
+    transform: "yoyPct",       // YoY % change
+    goodWhen: "above",
+    thresholds: { good: 0, caution: -5 },  // YoY > 0 = good; < -5% = bad; in between = caution
+    unit: "%",
+    description: "Building permits, YoY % change. Leading indicator of housing investment.",
+  },
+  {
+    id: "claims",
+    label: "Jobless Claims",
+    category: "Consumer",
+    series: "ICSA",
+    transform: "yoyPct",
+    goodWhen: "below",          // Claims rising = bad
+    thresholds: { good: 0, caution: 10 },  // YoY change in claims; rising fast = recession risk
+    unit: "%",
+    description: "Initial unemployment claims, YoY % change. Rising claims = labor market weakness.",
+  },
+  {
+    id: "retail",
+    label: "Retail Sales",
+    category: "Consumer",
+    series: "RSAFS",
+    transform: "yoyPct",
+    goodWhen: "above",
+    thresholds: { good: 2, caution: -1 },  // YoY > 2% = good; < -1% = bad
+    unit: "%",
+    description: "Advance retail sales, YoY % change. Consumer spending strength.",
+  },
+  {
+    id: "wages",
+    label: "Wage Growth",
+    category: "Consumer",
+    series: "CES0500000003",
+    transform: "yoyPct",
+    goodWhen: "above",
+    thresholds: { good: 3, caution: 2 },
+    unit: "%",
+    description: "Average hourly earnings, YoY % change. Real income growth.",
+  },
+  {
+    id: "unemployment",
+    label: "Unemployment Rate",
+    category: "Consumer",
+    series: "UNRATE",
+    transform: "level",         // Direct level
+    goodWhen: "below",
+    thresholds: { good: 4.5, caution: 5.5 },
+    unit: "%",
+    description: "U-3 unemployment rate. Lower = healthier labor market.",
+  },
+  // === BUSINESS ACTIVITY ===
+  {
+    id: "industrial",
+    label: "Industrial Production",
+    category: "Business Activity",
+    series: "INDPRO",
+    transform: "yoyPct",
+    goodWhen: "above",
+    thresholds: { good: 1, caution: -1 },
+    unit: "%",
+    description: "Industrial production index, YoY %. Manufacturing/utilities/mining output.",
+  },
+  {
+    id: "capacity",
+    label: "Capacity Utilization",
+    category: "Business Activity",
+    series: "TCU",
+    transform: "level",
+    goodWhen: "above",
+    thresholds: { good: 78, caution: 76 },
+    unit: "%",
+    description: "Total industry capacity utilization. >80% historically signals expansion.",
+  },
+  {
+    id: "pmi_proxy",
+    label: "PMI (Manuf. Proxy)",
+    category: "Business Activity",
+    series: "AMTMNO",            // Manufacturers' new orders — ISM proxy
+    transform: "yoyPct",
+    goodWhen: "above",
+    thresholds: { good: 2, caution: -2 },
+    unit: "%",
+    description: "Mfrs new orders, YoY % change. ISM PMI proxy (ISM data isn't free).",
+  },
+  // === FINANCIAL ===
+  {
+    id: "yieldcurve",
+    label: "Yield Curve (10Y–2Y)",
+    category: "Financial",
+    series: "T10Y2Y",
+    transform: "level",
+    goodWhen: "above",
+    thresholds: { good: 0.5, caution: 0 },  // > 0.5% = expansion; inverted (< 0) = recession risk
+    unit: "%",
+    description: "10Y minus 2Y Treasury spread. Inversion historically predicts recessions.",
+  },
+  {
+    id: "creditspread",
+    label: "HY Credit Spread",
+    category: "Financial",
+    series: "BAMLH0A0HYM2",
+    transform: "level",
+    goodWhen: "below",
+    thresholds: { good: 4, caution: 5.5 },
+    unit: "%",
+    description: "ICE BofA US High Yield Option-Adjusted Spread. Rising = credit stress.",
+  },
+  {
+    id: "moneysupply",
+    label: "Money Supply (M2)",
+    category: "Financial",
+    series: "M2SL",
+    transform: "yoyPct",
+    goodWhen: "above",
+    thresholds: { good: 2, caution: 0 },
+    unit: "%",
+    description: "M2 money stock, YoY % change. Liquidity in the financial system.",
+  },
+  {
+    id: "fedfunds_real",
+    label: "Real Fed Funds Rate",
+    category: "Financial",
+    series: "DFF",                // Pair with CPI to compute real rate (handled in fetcher)
+    transform: "level",
+    goodWhen: "below",
+    thresholds: { good: 1, caution: 2 },
+    unit: "%",
+    description: "Fed funds rate minus CPI YoY. High real rate = restrictive monetary policy.",
+  },
+];
+
+const RECESSION_THRESHOLDS_KEY = "pfg-recession-thresholds-v1";
+
+// ============================================================
+// ECONOMIC CALENDAR — known FRED series with their release cadence.
+// We pull the last 12 months of releases from FRED for actual values,
+// and project upcoming releases based on historical cadence.
+// ============================================================
+const CALENDAR_RELEASES = [
+  { id: "nfp",     name: "Non-Farm Payrolls",       series: "PAYEMS",  cadence: "monthly", typicalDay: 1, dayOfWeek: 5, impact: "high",   format: "delta", desc: "Monthly net job change (BLS Employment Situation)." },
+  { id: "unrate",  name: "Unemployment Rate",        series: "UNRATE",  cadence: "monthly", typicalDay: 1, dayOfWeek: 5, impact: "high",   format: "level", desc: "U-3 unemployment rate." },
+  { id: "cpi",     name: "CPI (All Items)",          series: "CPIAUCSL", cadence: "monthly", typicalDay: 10, impact: "high",  format: "yoy",   desc: "Consumer Price Index, YoY % change." },
+  { id: "core_cpi",name: "Core CPI",                 series: "CPILFESL", cadence: "monthly", typicalDay: 10, impact: "high",  format: "yoy",   desc: "CPI excluding food and energy, YoY %." },
+  { id: "ppi",     name: "PPI",                      series: "PPIACO",  cadence: "monthly", typicalDay: 11, impact: "medium", format: "yoy",   desc: "Producer Price Index, YoY %." },
+  { id: "retail",  name: "Retail Sales",             series: "RSAFS",   cadence: "monthly", typicalDay: 15, impact: "medium", format: "yoy",   desc: "Advance retail sales, YoY %." },
+  { id: "indpro",  name: "Industrial Production",    series: "INDPRO",  cadence: "monthly", typicalDay: 17, impact: "medium", format: "yoy",   desc: "Industrial production index, YoY %." },
+  { id: "gdp",     name: "GDP (Advance)",            series: "GDPC1",   cadence: "quarterly", typicalDay: 28, impact: "high", format: "qoq",   desc: "Real GDP, QoQ % annualized." },
+  { id: "claims",  name: "Initial Jobless Claims",   series: "ICSA",    cadence: "weekly",  dayOfWeek: 4, impact: "medium", format: "level", desc: "Initial unemployment claims (weekly)." },
+  { id: "permits", name: "Building Permits",         series: "PERMIT",  cadence: "monthly", typicalDay: 18, impact: "low",    format: "yoy",   desc: "Building permits, YoY %." },
+];
+
 // Key macro indicators
 const KEY_INDICATORS = [
   { sym: "^VIX", name: "VIX", desc: "Volatility", format: "raw" },
@@ -3200,49 +3545,52 @@ const ViewSwitcher = ({ actualUser, viewAs, setViewAs }) => {
 // Yahoo doesn't always return this; failures are non-fatal.
 // ============================================================
 async function fetchETFHoldings(symbol) {
-  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=topHoldings`;
-  try {
-    const json = await fetchThroughProxies(url, { expectJSON: true, timeoutMs: 8000 });
-    const r = json?.quoteSummary?.result?.[0]?.topHoldings;
-    if (!r) return null;
-    const u = (obj) => obj && typeof obj === "object" && "raw" in obj ? obj.raw : (obj ?? null);
-    return {
-      holdings: (r.holdings || []).map(h => ({
-        symbol: h.symbol,
-        name: typeof h.holdingName === "string" ? h.holdingName : u(h.holdingName),
-        weight: u(h.holdingPercent),
-      })),
-      sectorWeights: (r.sectorWeightings || []).map(s => {
-        const entries = Object.entries(s)[0] || [];
-        return { name: entries[0], weight: u(entries[1]) };
-      }),
-    };
-  } catch (e) {
-    return null;
-  }
+  return cached(`etfHoldings:${symbol}`, 24 * 60 * 60 * 1000, async () => {
+    const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=topHoldings`;
+    try {
+      const json = await fetchThroughProxies(url, { expectJSON: true, timeoutMs: 8000 });
+      const r = json?.quoteSummary?.result?.[0]?.topHoldings;
+      if (!r) return null;
+      const u = (obj) => obj && typeof obj === "object" && "raw" in obj ? obj.raw : (obj ?? null);
+      return {
+        holdings: (r.holdings || []).map(h => ({
+          symbol: h.symbol,
+          name: typeof h.holdingName === "string" ? h.holdingName : u(h.holdingName),
+          weight: u(h.holdingPercent),
+        })),
+        sectorWeights: (r.sectorWeightings || []).map(s => {
+          const entries = Object.entries(s)[0] || [];
+          return { name: entries[0], weight: u(entries[1]) };
+        }),
+      };
+    } catch (e) {
+      return null;
+    }
+  });
 }
 
 async function fetchYahooQuoteSummary(symbol) {
-  // Yahoo's quoteSummary can be picky — if you request a module that
-  // doesn't apply to the security type (e.g. earningsHistory on an ETF),
-  // the whole call returns 404. We split into two requests: a "core" set
-  // that works for everything, and a "stock-only" set we tolerate failing.
-  const coreModules = ["summaryDetail", "price", "defaultKeyStatistics"].join(",");
-  const stockModules = ["earnings", "earningsHistory", "earningsTrend", "incomeStatementHistoryQuarterly", "financialData", "calendarEvents"].join(",");
-  const u = (obj) => obj && typeof obj === "object" && "raw" in obj ? obj.raw : (obj ?? null);
+  return cached(`quoteSummary:${symbol}`, 5 * 60 * 1000, async () => {
+    // Yahoo's quoteSummary can be picky — if you request a module that
+    // doesn't apply to the security type (e.g. earningsHistory on an ETF),
+    // the whole call returns 404. We split into two requests: a "core" set
+    // that works for everything, and a "stock-only" set we tolerate failing.
+    const coreModules = ["summaryDetail", "price", "defaultKeyStatistics"].join(",");
+    const stockModules = ["earnings", "earningsHistory", "earningsTrend", "incomeStatementHistoryQuarterly", "financialData", "calendarEvents"].join(",");
+    const u = (obj) => obj && typeof obj === "object" && "raw" in obj ? obj.raw : (obj ?? null);
 
-  const coreUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${coreModules}`;
-  const stockUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${stockModules}`;
+    const coreUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${coreModules}`;
+    const stockUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${stockModules}`;
 
-  // Core MUST succeed. Stock-only is best-effort.
-  const coreJson = await fetchThroughProxies(coreUrl, { expectJSON: true, timeoutMs: 10000 });
-  const core = coreJson?.quoteSummary?.result?.[0];
-  if (!core) throw new Error("No quoteSummary data for " + symbol);
-  let stock = null;
-  try {
-    const stockJson = await fetchThroughProxies(stockUrl, { expectJSON: true, timeoutMs: 10000 });
-    stock = stockJson?.quoteSummary?.result?.[0];
-  } catch (e) { /* expected for ETFs */ }
+    // Core MUST succeed. Stock-only is best-effort.
+    const coreJson = await fetchThroughProxies(coreUrl, { expectJSON: true, timeoutMs: 10000 });
+    const core = coreJson?.quoteSummary?.result?.[0];
+    if (!core) throw new Error("No quoteSummary data for " + symbol);
+    let stock = null;
+    try {
+      const stockJson = await fetchThroughProxies(stockUrl, { expectJSON: true, timeoutMs: 10000 });
+      stock = stockJson?.quoteSummary?.result?.[0];
+    } catch (e) { /* expected for ETFs */ }
 
   const summary = core.summaryDetail || {};
   const stats = core.defaultKeyStatistics || {};
@@ -3295,7 +3643,8 @@ async function fetchYahooQuoteSummary(symbol) {
     nextEarningsDate: cal?.earnings?.earningsDate?.[0] ? new Date(u(cal.earnings.earningsDate[0]) * 1000) : null,
     nextEarningsEstimate: u(cal?.earnings?.earningsAverage),
     nextDividendDate: u(cal?.exDividendDate) ? new Date(u(cal.exDividendDate) * 1000) : null,
-  };
+    };
+  });
 }
 
 // ============================================================
@@ -3308,24 +3657,25 @@ async function fetchYahooQuoteSummary(symbol) {
 //   MORTGAGE30US → 30-Year Fixed Mortgage Rate (US Avg)
 // ============================================================
 async function fetchFRED(seriesId, daysBack = 365) {
-  const start = new Date(); start.setDate(start.getDate() - daysBack);
-  const startStr = start.toISOString().split("T")[0];
-  const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${seriesId}&cosd=${startStr}`;
-  try {
-    const text = await fetchThroughProxies(url, { expectJSON: false });
-    // Parse CSV: header row "observation_date,VALUE"
-    const lines = text.split("\n").filter(Boolean);
-    const data = [];
-    for (let i = 1; i < lines.length; i++) {
-      const [date, val] = lines[i].split(",");
-      const n = parseFloat(val);
-      if (!isNaN(n)) data.push({ date, value: n });
+  return cached(`fred:${seriesId}:${daysBack}`, 60 * 60 * 1000, async () => {
+    const start = new Date(); start.setDate(start.getDate() - daysBack);
+    const startStr = start.toISOString().split("T")[0];
+    const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${seriesId}&cosd=${startStr}`;
+    try {
+      const text = await fetchThroughProxies(url, { expectJSON: false });
+      const lines = text.split("\n").filter(Boolean);
+      const data = [];
+      for (let i = 1; i < lines.length; i++) {
+        const [date, val] = lines[i].split(",");
+        const n = parseFloat(val);
+        if (!isNaN(n)) data.push({ date, value: n });
+      }
+      return data;
+    } catch (e) {
+      console.warn("FRED fetch failed for", seriesId, e.message);
+      return [];
     }
-    return data;
-  } catch (e) {
-    console.warn("FRED fetch failed for", seriesId, e.message);
-    return [];
-  }
+  });
 }
 
 // Fetch the full US Treasury yield curve (one point each maturity, latest values)
@@ -3354,33 +3704,33 @@ async function fetchYieldCurve() {
 }
 
 async function fetchFearGreed() {
-  // CNN's endpoint returns history starting from the date in the URL path.
-  // To get ~1 year of history we pass a date 12 months ago.
-  // The most-recent reading in the payload becomes the "current" score.
-  const d = new Date();
-  d.setFullYear(d.getFullYear() - 1);
-  const dateStr = d.toISOString().split("T")[0];
-  const url = `https://production.dataviz.cnn.io/index/fearandgreed/graphdata/${dateStr}`;
-  try {
-    const data = await fetchThroughProxies(url, { expectJSON: true });
-    const fg = data.fear_and_greed;
-    if (!fg) return null;
-    // CNN payload: fear_and_greed_historical.data = [{x: ms_timestamp, y: score, rating}, ...]
-    const hist = data?.fear_and_greed_historical?.data || [];
-    return {
-      score: Math.round(fg.score),
-      rating: fg.rating,
-      previousClose: Math.round(fg.previous_close),
-      previousWeek: Math.round(fg.previous_1_week),
-      previousMonth: Math.round(fg.previous_1_month),
-      previousYear: Math.round(fg.previous_1_year),
-      timestamp: fg.timestamp,
-      historical: hist.map(d => ({ ts: d.x, score: d.y, rating: d.rating })),
-    };
-  } catch (e) {
-    console.warn("Fear & Greed fetch failed:", e.message);
-    return null;
-  }
+  return cached("fearGreed", 5 * 60 * 1000, async () => {
+    // CNN's endpoint returns history starting from the date in the URL path.
+    // To get ~1 year of history we pass a date 12 months ago.
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+    const dateStr = d.toISOString().split("T")[0];
+    const url = `https://production.dataviz.cnn.io/index/fearandgreed/graphdata/${dateStr}`;
+    try {
+      const data = await fetchThroughProxies(url, { expectJSON: true });
+      const fg = data.fear_and_greed;
+      if (!fg) return null;
+      const hist = data?.fear_and_greed_historical?.data || [];
+      return {
+        score: Math.round(fg.score),
+        rating: fg.rating,
+        previousClose: Math.round(fg.previous_close),
+        previousWeek: Math.round(fg.previous_1_week),
+        previousMonth: Math.round(fg.previous_1_month),
+        previousYear: Math.round(fg.previous_1_year),
+        timestamp: fg.timestamp,
+        historical: hist.map(d => ({ ts: d.x, score: d.y, rating: d.rating })),
+      };
+    } catch (e) {
+      console.warn("Fear & Greed fetch failed:", e.message);
+      return null;
+    }
+  });
 }
 
 const TRADING_HOLIDAYS = {
@@ -3937,7 +4287,6 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
     { key: "models", icon: IconList, label: "Models" },
     { key: "macro", icon: IconDollar, label: "Macro" },
     { key: "outlook", icon: IconClipboard, label: "Quarterly Outlook" },
-    { key: "risk", icon: IconClipboard, label: "Risk Profiler" },
   ];
 
   return (
@@ -4367,7 +4716,6 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
 
         {page === "macro" && <MacroDashboard />}
         {page === "outlook" && <QuarterlyOutlook canEdit={canEditOwnerStuff} outlookData={outlookData} saveOutlook={(next) => { setOutlookData(next); try { window.storage.set("pfg-outlook-v1", JSON.stringify(next)); } catch (e) {} }} />}
-        {page === "risk" && <RiskProfiler />}
 
       </div>
 
@@ -4814,8 +5162,18 @@ function DrawdownScanner({ onOpenSector, onOpenStock }) {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: ALL_SUB_INDUSTRIES.length });
   const [error, setError] = useState(null);
-  const [sortBy, setSortBy] = useState("currentDD"); // currentDD | peakDD | windowRet | dd52w
-  const [holdingsFor, setHoldingsFor] = useState(null); // ETF symbol whose holdings are shown
+  const [sortBy, setSortBy] = useState("currentDD");
+  const [sortDir, setSortDir] = useState("asc");     // asc = most negative first
+  const [searchQuery, setSearchQuery] = useState("");
+  const [columnFilters, setColumnFilters] = useState({
+    // Each numeric column has { min, max } where empty string = unbounded
+    last:      { min: "", max: "" },
+    windowRet: { min: "", max: "" },
+    currentDD: { min: "", max: "" },
+    maxDD:     { min: "", max: "" },
+    dd52w:     { min: "", max: "" },
+  });
+  const [holdingsFor, setHoldingsFor] = useState(null);
   const [holdingsData, setHoldingsData] = useState(null);
   const [holdingsLoading, setHoldingsLoading] = useState(false);
 
@@ -4920,17 +5278,80 @@ function DrawdownScanner({ onOpenSector, onOpenStock }) {
 
   useEffect(() => { runScan(); }, [runScan]);
 
-  // Sort and filter
-  const filtered = results.filter(r => parentFilter === "ALL" || r.parent === parentFilter);
-  const sorted = [...filtered].sort((a, b) => {
-    switch (sortBy) {
-      case "currentDD": return (a.currentDD ?? 0) - (b.currentDD ?? 0);  // most-negative first
-      case "peakDD":    return (a.maxDD ?? 0) - (b.maxDD ?? 0);
-      case "windowRet": return (a.windowRet ?? 0) - (b.windowRet ?? 0);
-      case "dd52w":     return (a.dd52w ?? 0) - (b.dd52w ?? 0);
-      default: return 0;
+  // Multi-stage filter pipeline:
+  //  1. sector dropdown
+  //  2. text search across ticker, industry name, parent sector name
+  //  3. per-column numeric ranges
+  const passesColumnFilter = (val, range) => {
+    if (val == null) return range.min === "" && range.max === "";
+    if (range.min !== "" && val < parseFloat(range.min)) return false;
+    if (range.max !== "" && val > parseFloat(range.max)) return false;
+    return true;
+  };
+  const filtered = results.filter(r => {
+    // sector filter
+    if (parentFilter !== "ALL" && r.parent !== parentFilter) return false;
+    // text search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const parentName = SECTOR_ETFS.find(s => s.sym === r.parent)?.name?.toLowerCase() || "";
+      const haystack = `${r.sym} ${r.name} ${parentName}`.toLowerCase();
+      if (!haystack.includes(q)) return false;
     }
+    // column filters
+    if (!passesColumnFilter(r.last,      columnFilters.last))      return false;
+    if (!passesColumnFilter(r.windowRet, columnFilters.windowRet)) return false;
+    if (!passesColumnFilter(r.currentDD, columnFilters.currentDD)) return false;
+    if (!passesColumnFilter(r.maxDD,     columnFilters.maxDD))     return false;
+    if (!passesColumnFilter(r.dd52w,     columnFilters.dd52w))     return false;
+    return true;
   });
+
+  // Sort with direction
+  const sortFns = {
+    sym:       (a, b) => a.sym.localeCompare(b.sym),
+    name:      (a, b) => a.name.localeCompare(b.name),
+    parent:    (a, b) => (SECTOR_ETFS.find(s => s.sym === a.parent)?.name || "").localeCompare(SECTOR_ETFS.find(s => s.sym === b.parent)?.name || ""),
+    last:      (a, b) => (a.last ?? 0) - (b.last ?? 0),
+    windowRet: (a, b) => (a.windowRet ?? 0) - (b.windowRet ?? 0),
+    currentDD: (a, b) => (a.currentDD ?? 0) - (b.currentDD ?? 0),
+    peakDD:    (a, b) => (a.maxDD ?? 0) - (b.maxDD ?? 0),
+    dd52w:     (a, b) => (a.dd52w ?? 0) - (b.dd52w ?? 0),
+  };
+  const sorted = [...filtered].sort((a, b) => {
+    const fn = sortFns[sortBy] || sortFns.currentDD;
+    const cmp = fn(a, b);
+    return sortDir === "desc" ? -cmp : cmp;
+  });
+
+  // Toggle sort: clicking same column flips direction; clicking new column starts asc
+  const toggleSort = (col) => {
+    if (sortBy === col) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(col);
+      // For DD columns default to ascending (most-negative first); for others descending
+      setSortDir(["currentDD", "peakDD", "dd52w", "windowRet"].includes(col) ? "asc" : "desc");
+    }
+  };
+  const SortIcon = ({ col }) => {
+    if (sortBy !== col) return <span style={{ opacity: 0.3, marginLeft: 4 }}>↕</span>;
+    return <span style={{ marginLeft: 4, color: COLORS.primary }}>{sortDir === "asc" ? "▲" : "▼"}</span>;
+  };
+
+  const clearAllFilters = () => {
+    setSearchQuery("");
+    setParentFilter("ALL");
+    setColumnFilters({
+      last:      { min: "", max: "" },
+      windowRet: { min: "", max: "" },
+      currentDD: { min: "", max: "" },
+      maxDD:     { min: "", max: "" },
+      dd52w:     { min: "", max: "" },
+    });
+  };
+  const hasActiveFilters = searchQuery.trim() !== "" || parentFilter !== "ALL" ||
+    Object.values(columnFilters).some(f => f.min !== "" || f.max !== "");
 
   const parentName = (p) => SECTOR_ETFS.find(s => s.sym === p)?.name || p;
   const fmtPct = (n) => n == null ? "—" : (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
@@ -4970,7 +5391,7 @@ function DrawdownScanner({ onOpenSector, onOpenStock }) {
       </div>
 
       {/* Controls */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
         <div>
           <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>Window</div>
           <select value={windowKey} onChange={e => setWindowKey(e.target.value)}
@@ -4981,7 +5402,7 @@ function DrawdownScanner({ onOpenSector, onOpenStock }) {
           </select>
         </div>
         <div>
-          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>Sector Filter</div>
+          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>Sector</div>
           <select value={parentFilter} onChange={e => setParentFilter(e.target.value)}
             style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", background: COLORS.surface }}>
             <option value="ALL">All sectors ({results.length})</option>
@@ -4991,21 +5412,22 @@ function DrawdownScanner({ onOpenSector, onOpenStock }) {
             })}
           </select>
         </div>
-        <div>
-          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>Sort By</div>
-          <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-            style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", background: COLORS.surface }}>
-            <option value="currentDD">Current DD (deepest first)</option>
-            <option value="peakDD">Peak-to-Trough DD (worst first)</option>
-            <option value="dd52w">52W Off-High (deepest first)</option>
-            <option value="windowRet">Window Return (worst first)</option>
-          </select>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>Search</div>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Ticker, industry, sector…"
+            style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }}
+          />
         </div>
-        <div style={{ marginLeft: "auto" }}>
-          <Button size="sm" variant="ghost" onClick={runScan} disabled={loading}>
-            {loading ? `Scanning ${progress.done}/${progress.total}…` : "↻ Rescan"}
-          </Button>
-        </div>
+        {hasActiveFilters && (
+          <Button size="sm" variant="ghost" onClick={clearAllFilters}>Clear filters</Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={runScan} disabled={loading}>
+          {loading ? `Scanning ${progress.done}/${progress.total}…` : "↻ Rescan"}
+        </Button>
       </div>
 
       {error && (
@@ -5036,15 +5458,34 @@ function DrawdownScanner({ onOpenSector, onOpenStock }) {
           <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse", minWidth: 900 }}>
             <thead>
               <tr style={{ background: COLORS.bg, textAlign: "left" }}>
-                <th style={{ padding: "10px", position: "sticky", left: 0, background: COLORS.bg }}>ETF</th>
-                <th style={{ padding: "10px" }}>Industry</th>
-                <th style={{ padding: "10px" }}>Sector</th>
-                <th style={{ padding: "10px", textAlign: "right" }}>Last</th>
-                <th style={{ padding: "10px", textAlign: "right" }}>{WINDOWS[windowKey].label} Return</th>
-                <th style={{ padding: "10px", textAlign: "right" }}>Current DD</th>
-                <th style={{ padding: "10px", textAlign: "right" }}>Peak-to-Trough DD</th>
-                <th style={{ padding: "10px", textAlign: "right" }}>52W Off-High</th>
+                <th onClick={() => toggleSort("sym")} style={{ padding: "10px", position: "sticky", left: 0, background: COLORS.bg, cursor: "pointer", userSelect: "none" }}>ETF<SortIcon col="sym" /></th>
+                <th onClick={() => toggleSort("name")} style={{ padding: "10px", cursor: "pointer", userSelect: "none" }}>Industry<SortIcon col="name" /></th>
+                <th onClick={() => toggleSort("parent")} style={{ padding: "10px", cursor: "pointer", userSelect: "none" }}>Sector<SortIcon col="parent" /></th>
+                <th onClick={() => toggleSort("last")} style={{ padding: "10px", textAlign: "right", cursor: "pointer", userSelect: "none" }}>Last<SortIcon col="last" /></th>
+                <th onClick={() => toggleSort("windowRet")} style={{ padding: "10px", textAlign: "right", cursor: "pointer", userSelect: "none" }}>{WINDOWS[windowKey].label} Return<SortIcon col="windowRet" /></th>
+                <th onClick={() => toggleSort("currentDD")} style={{ padding: "10px", textAlign: "right", cursor: "pointer", userSelect: "none" }}>Current DD<SortIcon col="currentDD" /></th>
+                <th onClick={() => toggleSort("peakDD")} style={{ padding: "10px", textAlign: "right", cursor: "pointer", userSelect: "none" }}>Peak-to-Trough DD<SortIcon col="peakDD" /></th>
+                <th onClick={() => toggleSort("dd52w")} style={{ padding: "10px", textAlign: "right", cursor: "pointer", userSelect: "none" }}>52W Off-High<SortIcon col="dd52w" /></th>
                 <th style={{ padding: "10px" }}>Holdings</th>
+              </tr>
+              {/* Per-column filter row */}
+              <tr style={{ background: COLORS.surface }}>
+                <th style={{ padding: "4px 10px", position: "sticky", left: 0, background: COLORS.surface, borderBottom: `1px solid ${COLORS.border}` }}></th>
+                <th style={{ padding: "4px 10px", borderBottom: `1px solid ${COLORS.border}` }}></th>
+                <th style={{ padding: "4px 10px", borderBottom: `1px solid ${COLORS.border}` }}></th>
+                {["last", "windowRet", "currentDD", "maxDD", "dd52w"].map(col => (
+                  <th key={col} style={{ padding: "4px 6px", borderBottom: `1px solid ${COLORS.border}` }}>
+                    <div style={{ display: "flex", gap: 3, justifyContent: "flex-end" }}>
+                      <input type="number" placeholder="min" value={columnFilters[col].min}
+                        onChange={e => setColumnFilters(prev => ({ ...prev, [col]: { ...prev[col], min: e.target.value } }))}
+                        style={{ width: 50, padding: "2px 4px", fontSize: 11, border: `1px solid ${COLORS.borderLight}`, borderRadius: 3, fontFamily: "inherit", textAlign: "right" }} />
+                      <input type="number" placeholder="max" value={columnFilters[col].max}
+                        onChange={e => setColumnFilters(prev => ({ ...prev, [col]: { ...prev[col], max: e.target.value } }))}
+                        style={{ width: 50, padding: "2px 4px", fontSize: 11, border: `1px solid ${COLORS.borderLight}`, borderRadius: 3, fontFamily: "inherit", textAlign: "right" }} />
+                    </div>
+                  </th>
+                ))}
+                <th style={{ padding: "4px 10px", borderBottom: `1px solid ${COLORS.border}` }}></th>
               </tr>
             </thead>
             <tbody>
@@ -5094,7 +5535,7 @@ function DrawdownScanner({ onOpenSector, onOpenStock }) {
       )}
 
       <div style={{ marginTop: 12, padding: 10, background: COLORS.bg, borderRadius: 6, fontSize: 11, color: COLORS.textDim, lineHeight: 1.5 }}>
-        Window: <b style={{ color: COLORS.text }}>{WINDOWS[windowKey].label}</b> · ETFs in scan: <b style={{ color: COLORS.text }}>{ALL_SUB_INDUSTRIES.length}</b> · Showing: <b style={{ color: COLORS.text }}>{sorted.length}</b>. Click 📊 for in-app fundamentals, ↗ for Morningstar, or sector name for sub-industry breakdown.
+        Window: <b style={{ color: COLORS.text }}>{WINDOWS[windowKey].label}</b> · Universe: <b style={{ color: COLORS.text }}>{ALL_SUB_INDUSTRIES.length}</b> ETFs · Showing: <b style={{ color: COLORS.text }}>{sorted.length}</b> of <b>{results.length}</b>{hasActiveFilters && <> · <span style={{ color: COLORS.primary, fontWeight: 600 }}>filters active</span></>}. Click any column header to sort, type in the filter row to narrow.
       </div>
 
       {/* Holdings modal */}
@@ -5509,17 +5950,15 @@ function SectorDetailModal({ sector, open, onClose, onOpenStock }) {
         }],
       },
       options: {
-        responsive: true, maintainAspectRatio: false,
-        scales: {
-          y: { ticks: { callback: (v) => "$" + v.toFixed(0) } },
-          x: { ticks: { maxTicksLimit: 8 } },
-        },
+        ...interactiveLineOptions({ priceFormat: true }),
         plugins: {
-          legend: { display: false },
+          ...interactiveLineOptions({ priceFormat: true }).plugins,
           tooltip: {
+            ...interactiveLineOptions({ priceFormat: true }).plugins.tooltip,
             callbacks: {
+              title: (ctxs) => labels[ctxs[0].dataIndex]?.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) || "",
               label: (ctx) => {
-                const lines = ["$" + ctx.raw.toFixed(2)];
+                const lines = ["Price: $" + ctx.raw.toFixed(2)];
                 if (ctx.dataIndex === hiIdx) lines.push("🟢 52-Week High");
                 if (ctx.dataIndex === loIdx) lines.push("🔴 52-Week Low");
                 if (ctx.dataIndex === ytdStartIdx) lines.push("📅 Jan 1 (YTD start)");
@@ -5529,6 +5968,7 @@ function SectorDetailModal({ sector, open, onClose, onOpenStock }) {
           },
         },
       },
+      plugins: [crosshairPlugin],
     });
     return () => { if (chartObj.current) chartObj.current.destroy(); };
   }, [open, sectorReturns]);
@@ -5579,9 +6019,15 @@ function SectorDetailModal({ sector, open, onClose, onOpenStock }) {
             <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Rolling 1-Year Price</div>
             <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 2 }}>
               <span style={{ color: COLORS.success }}>● 52W High</span> · <span style={{ color: COLORS.danger }}>● 52W Low</span> · <span style={{ color: COLORS.gold }}>● YTD Start</span>
+              <span style={{ marginLeft: 8, color: COLORS.textDim }}>· drag to zoom · shift+drag to pan</span>
             </div>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => { if (chartObj.current) try { chartObj.current.resetZoom(); } catch (e) {} }}
+              title="Reset zoom"
+              style={{ padding: "4px 10px", borderRadius: 4, border: `1px solid ${COLORS.border}`, background: COLORS.surface, color: COLORS.textMuted, fontFamily: "inherit", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+              ⟲ Reset zoom
+            </button>
             <a href={`https://finance.yahoo.com/quote/${sector.sym}/holdings`} target="_blank" rel="noopener" style={{ fontSize: 11, padding: "4px 10px", borderRadius: 4, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Yahoo Holdings ↗</a>
             <a href={morningstarUrl(sector.sym)} target="_blank" rel="noopener" style={{ fontSize: 11, padding: "4px 10px", borderRadius: 4, background: COLORS.bg, color: COLORS.text, textDecoration: "none", border: `1px solid ${COLORS.border}` }}>Morningstar ↗</a>
           </div>
@@ -5663,7 +6109,10 @@ function StockDetailModal({ symbol, open, onClose }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [fundamentalsError, setFundamentalsError] = useState(null);
-  const [priceData, setPriceData] = useState(null);     // 1Y price data
+  const [priceData, setPriceData] = useState(null);     // currently-shown price data (changes with chartRange)
+  const [oneYearData, setOneYearData] = useState(null); // 1Y data kept for return calcs + 52W markers
+  const [chartRange, setChartRange] = useState("1Y");   // "1M" | "3M" | "6M" | "YTD" | "1Y" | "5Y" | "MAX"
+  const [chartRangeLoading, setChartRangeLoading] = useState(false);
   const [returns, setReturns] = useState({});           // computed multi-window returns
   const [expanded, setExpanded] = useState({           // collapsible sections
     metrics: true,
@@ -5711,6 +6160,7 @@ function StockDetailModal({ symbol, open, onClose }) {
           return ((arr[arr.length - 1] - start) / start) * 100;
         };
         setPriceData(oneYr || threeMo || ytd);
+        setOneYearData(oneYr);   // keep for 52W markers / returns
         setReturns({
           oneMonth: ret(c3, 21),
           sixtyDay: ret(c3, 60),
@@ -5743,7 +6193,36 @@ function StockDetailModal({ symbol, open, onClose }) {
     return () => { cancelled = true; };
   }, [open, symbol]);
 
-  // Rolling 1Y price chart with 52W high/low + YTD start + earnings date markers
+  // Re-fetch price data when chartRange changes (only after initial load is done)
+  useEffect(() => {
+    if (!open || !symbol || !oneYearData) return; // wait for first load
+    let cancelled = false;
+    // Map our friendly range names to Yahoo's range+interval
+    const yahooArgs = {
+      "1M":  { range: "1mo", interval: "1d" },
+      "3M":  { range: "3mo", interval: "1d" },
+      "6M":  { range: "6mo", interval: "1d" },
+      "YTD": { range: "ytd", interval: "1d" },
+      "1Y":  { range: "1y",  interval: "1d" },
+      "5Y":  { range: "5y",  interval: "1wk" },
+      "MAX": { range: "max", interval: "1mo" },
+    };
+    const args = yahooArgs[chartRange] || yahooArgs["1Y"];
+    (async () => {
+      setChartRangeLoading(true);
+      try {
+        const d = await fetchYahoo(symbol, args.range, args.interval);
+        if (!cancelled && d) setPriceData(d);
+      } catch (e) {
+        // Keep previous priceData on failure
+      } finally {
+        if (!cancelled) setChartRangeLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [chartRange, open, symbol, oneYearData]);
+
+  // Rolling price chart with markers — uses interactive options (crosshair + drag-to-zoom)
   useEffect(() => {
     if (!open || !priceData || !priceCanvasRef.current) return;
     if (priceChartRef.current) { priceChartRef.current.destroy(); priceChartRef.current = null; }
@@ -5752,7 +6231,8 @@ function StockDetailModal({ symbol, open, onClose }) {
     const labels = cleanTs.map(t => new Date(t * 1000));
     if (cleanCloses.length < 2) return;
 
-    // Marker indices
+    // Marker indices — only meaningful on the 1Y view; we still compute but the
+    // markers may not appear if the range is shorter or much longer
     const hiIdx = cleanCloses.indexOf(Math.max(...cleanCloses));
     const loIdx = cleanCloses.indexOf(Math.min(...cleanCloses));
     const yearStart = new Date(new Date().getFullYear(), 0, 1);
@@ -5804,17 +6284,15 @@ function StockDetailModal({ symbol, open, onClose }) {
         }],
       },
       options: {
-        responsive: true, maintainAspectRatio: false,
-        scales: {
-          y: { title: { display: true, text: "Price ($)" }, ticks: { callback: (v) => "$" + v.toFixed(0) } },
-          x: { ticks: { maxTicksLimit: 8 } },
-        },
+        ...interactiveLineOptions({ priceFormat: true }),
         plugins: {
-          legend: { display: false },
+          ...interactiveLineOptions({ priceFormat: true }).plugins,
           tooltip: {
+            ...interactiveLineOptions({ priceFormat: true }).plugins.tooltip,
             callbacks: {
+              title: (ctxs) => labels[ctxs[0].dataIndex]?.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) || "",
               label: (ctx) => {
-                const lines = ["$" + ctx.raw.toFixed(2)];
+                const lines = ["Price: $" + ctx.raw.toFixed(2)];
                 if (ctx.dataIndex === hiIdx) lines.push("🟢 52-Week High");
                 if (ctx.dataIndex === loIdx) lines.push("🔴 52-Week Low");
                 if (ctx.dataIndex === ytdStartIdx) lines.push("📅 Jan 1 (YTD start)");
@@ -5825,6 +6303,7 @@ function StockDetailModal({ symbol, open, onClose }) {
           },
         },
       },
+      plugins: [crosshairPlugin],
     });
     return () => { if (priceChartRef.current) priceChartRef.current.destroy(); };
   }, [open, priceData, data, symbol]);
@@ -5948,16 +6427,45 @@ function StockDetailModal({ symbol, open, onClose }) {
         </div>
       )}
 
-      {/* Rolling 1Y price chart — always shown if priceData loaded */}
+      {/* Rolling price chart — always shown if priceData loaded */}
       {priceData && (
         <Card style={{ padding: 14, marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 4 }}>
-            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Rolling 1-Year Price</div>
-            <div style={{ fontSize: 11, color: COLORS.textDim }}>
-              <span style={{ color: COLORS.success }}>● 52W High</span> · <span style={{ color: COLORS.danger }}>● 52W Low</span> · <span style={{ color: COLORS.gold }}>● YTD Start</span>{data?.earningsHistory?.length ? <> · <span style={{ color: COLORS.primaryDark }}>● Earnings</span></> : null}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>
+                Price History · {chartRange}{chartRangeLoading && <span style={{ marginLeft: 8, color: COLORS.textDim }}>· loading…</span>}
+              </div>
+              <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 2 }}>
+                <span style={{ color: COLORS.success }}>● 52W High</span> · <span style={{ color: COLORS.danger }}>● 52W Low</span> · <span style={{ color: COLORS.gold }}>● YTD Start</span>{data?.earningsHistory?.length ? <> · <span style={{ color: COLORS.primaryDark }}>● Earnings</span></> : null}
+                <span style={{ marginLeft: 8, color: COLORS.textDim }}>· drag to zoom · shift+drag to pan · ctrl+scroll to zoom</span>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {["1M", "3M", "6M", "YTD", "1Y", "5Y", "MAX"].map(r => (
+                <button key={r} onClick={() => setChartRange(r)}
+                  style={{
+                    padding: "5px 10px",
+                    borderRadius: 4,
+                    border: `1px solid ${chartRange === r ? COLORS.primary : COLORS.border}`,
+                    background: chartRange === r ? COLORS.primary : COLORS.surface,
+                    color: chartRange === r ? "white" : COLORS.text,
+                    fontFamily: "inherit",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    minWidth: 36,
+                  }}>
+                  {r}
+                </button>
+              ))}
+              <button onClick={() => { if (priceChartRef.current) try { priceChartRef.current.resetZoom(); } catch (e) {} }}
+                title="Reset zoom"
+                style={{ padding: "5px 10px", borderRadius: 4, border: `1px solid ${COLORS.border}`, background: COLORS.surface, color: COLORS.textMuted, fontFamily: "inherit", fontSize: 11, fontWeight: 600, cursor: "pointer", marginLeft: 4 }}>
+                ⟲ Reset
+              </button>
             </div>
           </div>
-          <div style={{ height: 240 }}><canvas ref={priceCanvasRef} /></div>
+          <div style={{ height: 280 }}><canvas ref={priceCanvasRef} /></div>
         </Card>
       )}
 
@@ -6274,6 +6782,7 @@ function StockDashboard({ universe, setUniverse, canEdit }) {
 // MACRO DASHBOARD — yield curve, Fed funds, mortgage, client resources
 // ============================================================
 function MacroDashboard() {
+  const [macroTab, setMacroTab] = useState("dashboard"); // "dashboard" | "recession" | "calendar"
   const [yieldCurve, setYieldCurve] = useState([]);
   const [fedRate, setFedRate] = useState(null);
   const [fedHistory, setFedHistory] = useState([]);
@@ -6400,15 +6909,50 @@ function MacroDashboard() {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Macro Dashboard</h2>
           <p style={{ color: COLORS.textMuted, fontSize: 13, margin: "4px 0 0" }}>
-            US Treasury yield curve, Fed funds rate, mortgage rates. Data from FRED (Federal Reserve Economic Data).
+            US economic indicators, yield curve, FOMC schedule, recession monitor, economic calendar.
           </p>
         </div>
-        <Button size="sm" variant="ghost" onClick={loadAll}>{loading ? "Loading…" : "↻ Refresh"}</Button>
+        {macroTab === "dashboard" && (
+          <Button size="sm" variant="ghost" onClick={loadAll}>{loading ? "Loading…" : "↻ Refresh"}</Button>
+        )}
       </div>
+
+      {/* Macro sub-tab switcher */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, padding: 4, background: COLORS.bg, borderRadius: 10, flexWrap: "wrap" }}>
+        {[
+          { key: "dashboard", label: "Rates & Curves", icon: "≡" },
+          { key: "recession", label: "Recession Monitor", icon: "⚠" },
+          { key: "calendar", label: "Economic Calendar", icon: "📅" },
+        ].map(t => (
+          <button key={t.key} onClick={() => setMacroTab(t.key)}
+            style={{
+              flex: "1 1 200px",
+              padding: "10px 14px",
+              borderRadius: 8,
+              border: "none",
+              background: macroTab === t.key ? COLORS.surface : "transparent",
+              color: macroTab === t.key ? COLORS.primaryDark : COLORS.textMuted,
+              fontWeight: macroTab === t.key ? 700 : 500,
+              fontSize: 13,
+              fontFamily: "inherit",
+              cursor: "pointer",
+              boxShadow: macroTab === t.key ? "0 2px 6px rgba(0,0,0,0.08)" : "none",
+              transition: "all 0.15s",
+            }}>
+            <span style={{ marginRight: 6, opacity: 0.8 }}>{t.icon}</span> {t.label}
+          </button>
+        ))}
+      </div>
+
+      {macroTab === "recession" && <RecessionMonitor />}
+      {macroTab === "calendar" && <EconomicCalendar />}
+
+      {macroTab === "dashboard" && (
+      <>
 
       {error && (
         <Card style={{ padding: 14, marginBottom: 16, background: COLORS.danger + "11", borderLeft: `4px solid ${COLORS.danger}` }}>
@@ -6571,11 +7115,567 @@ function MacroDashboard() {
           </a>
         </div>
       </Card>
+      </>
+      )}
     </div>
   );
 }
 
 // ============================================================
+// RECESSION MONITOR — Franklin-style indicator grid.
+// 12 FRED indicators across Consumer / Business Activity / Financial categories.
+// Owner-editable thresholds saved to localStorage.
+// Shows current quarter-end + 2 prior quarter-ends.
+// ============================================================
+function RecessionMonitor() {
+  const [indicatorData, setIndicatorData] = useState({}); // { id: { period1: {value, status, date}, period2:..., period3:... } }
+  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: RECESSION_INDICATORS.length });
+  const [error, setError] = useState(null);
+  const [thresholds, setThresholds] = useState({});
+  const [editingThresholds, setEditingThresholds] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
+
+  // Detect if current user can edit — check if HR settings show them as owner
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await window.storage.get("pfg-current-user-can-edit-recession");
+        if (r?.value === "true") setCanEdit(true);
+      } catch (e) {}
+    })();
+  }, []);
+
+  // Load saved thresholds (fall back to defaults)
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await window.storage.get(RECESSION_THRESHOLDS_KEY);
+        if (r?.value) {
+          setThresholds(JSON.parse(r.value));
+          return;
+        }
+      } catch (e) {}
+      // No saved data — initialize from defaults
+      const defaults = {};
+      RECESSION_INDICATORS.forEach(ind => {
+        defaults[ind.id] = { ...ind.thresholds };
+      });
+      setThresholds(defaults);
+    })();
+  }, []);
+
+  // Compute the 3 quarter-end dates (current + 2 prior)
+  const periodDates = useMemo(() => {
+    const now = new Date();
+    const dates = [];
+    // Walk back through prior quarter-ends
+    const month = now.getMonth();
+    const year = now.getFullYear();
+    // Determine current quarter end
+    let qEnd;
+    if (month < 3) qEnd = new Date(year - 1, 11, 31);       // last year Q4
+    else if (month < 6) qEnd = new Date(year, 2, 31);        // Q1
+    else if (month < 9) qEnd = new Date(year, 5, 30);        // Q2
+    else if (month < 12) qEnd = new Date(year, 8, 30);       // Q3
+    else qEnd = new Date(year, 11, 31);                       // Q4
+    for (let i = 0; i < 3; i++) {
+      dates.push(new Date(qEnd));
+      qEnd = new Date(qEnd.getFullYear(), qEnd.getMonth() - 3, qEnd.getDate());
+    }
+    return dates;
+  }, []);
+
+  // Helper to score a value given an indicator
+  const scoreValue = (indicator, value) => {
+    if (value == null || isNaN(value)) return "missing";
+    const t = thresholds[indicator.id] || indicator.thresholds;
+    const goodThresh = t.good;
+    const cautionThresh = t.caution;
+    if (indicator.goodWhen === "above") {
+      // higher = better
+      if (value >= goodThresh) return "good";
+      if (value >= cautionThresh) return "caution";
+      return "bad";
+    } else {
+      // lower = better
+      if (value <= goodThresh) return "good";
+      if (value <= cautionThresh) return "caution";
+      return "bad";
+    }
+  };
+
+  const loadAll = useCallback(async () => {
+    setLoading(true); setError(null);
+    setProgress({ done: 0, total: RECESSION_INDICATORS.length });
+
+    // Helper: pick a value at-or-before a target date from a FRED time series
+    const valueNearDate = (series, targetDate) => {
+      if (!series || series.length === 0) return null;
+      // Series is sorted ascending by date. Find latest entry <= target.
+      const targetTime = targetDate.getTime();
+      let latest = null;
+      for (const pt of series) {
+        const t = new Date(pt.date + "T00:00:00").getTime();
+        if (t <= targetTime) latest = pt;
+        else break;
+      }
+      return latest;
+    };
+
+    try {
+      const out = {};
+      let done = 0;
+      // For real fed funds rate, we need CPI series too
+      const cpiSeries = await fetchFRED("CPIAUCSL", 1300).catch(() => []);
+      for (const ind of RECESSION_INDICATORS) {
+        try {
+          // Fetch 3+ years of data so we can compute YoY and have prior periods
+          const series = await fetchFRED(ind.series, 1300).catch(() => []);
+          const periodValues = {};
+          periodDates.forEach((d, idx) => {
+            let value = null;
+            const pt = valueNearDate(series, d);
+            if (!pt) { periodValues["p" + idx] = { value: null, date: null }; return; }
+            if (ind.transform === "level") {
+              value = pt.value;
+              // For real fed funds: subtract CPI YoY
+              if (ind.id === "fedfunds_real") {
+                const cpiNow = valueNearDate(cpiSeries, d);
+                // CPI a year before
+                const yearAgo = new Date(d); yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+                const cpiYearAgo = valueNearDate(cpiSeries, yearAgo);
+                if (cpiNow && cpiYearAgo && cpiYearAgo.value) {
+                  const cpiYoY = ((cpiNow.value - cpiYearAgo.value) / cpiYearAgo.value) * 100;
+                  value = pt.value - cpiYoY;
+                }
+              }
+            } else if (ind.transform === "yoyPct") {
+              // YoY: compare to value 12 months earlier
+              const yearAgo = new Date(d); yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+              const ptYearAgo = valueNearDate(series, yearAgo);
+              if (ptYearAgo && ptYearAgo.value) {
+                value = ((pt.value - ptYearAgo.value) / ptYearAgo.value) * 100;
+              }
+            }
+            periodValues["p" + idx] = { value, date: pt.date, rawValue: pt.value };
+          });
+          out[ind.id] = periodValues;
+        } catch (e) {
+          out[ind.id] = { p0: { value: null }, p1: { value: null }, p2: { value: null } };
+        }
+        done++;
+        setProgress({ done, total: RECESSION_INDICATORS.length });
+      }
+      setIndicatorData(out);
+    } catch (e) {
+      setError(e.message);
+    }
+    setLoading(false);
+  }, [periodDates]);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Save thresholds when edited
+  const saveThresholds = () => {
+    try {
+      window.storage.set(RECESSION_THRESHOLDS_KEY, JSON.stringify(thresholds));
+    } catch (e) {}
+    setEditingThresholds(false);
+  };
+  const resetThresholds = () => {
+    const defaults = {};
+    RECESSION_INDICATORS.forEach(ind => { defaults[ind.id] = { ...ind.thresholds }; });
+    setThresholds(defaults);
+  };
+
+  // Compute overall signal per period: count how many indicators are bad/caution
+  const overallByPeriod = periodDates.map((_, pIdx) => {
+    let good = 0, caution = 0, bad = 0, missing = 0;
+    RECESSION_INDICATORS.forEach(ind => {
+      const v = indicatorData[ind.id]?.["p" + pIdx]?.value;
+      const status = scoreValue(ind, v);
+      if (status === "good") good++;
+      else if (status === "caution") caution++;
+      else if (status === "bad") bad++;
+      else missing++;
+    });
+    let signal = "good";
+    if (bad >= 3) signal = "bad";
+    else if (bad + caution >= 5) signal = "caution";
+    else if (caution >= 4) signal = "caution";
+    return { good, caution, bad, missing, signal };
+  });
+
+  const StatusIcon = ({ status, size = 14 }) => {
+    if (status === "good") return <span style={{ color: "#1FB67D", fontSize: size, fontWeight: 700 }}>↑</span>;
+    if (status === "caution") return <span style={{ color: "#EAC82E", fontSize: size, fontWeight: 700 }}>●</span>;
+    if (status === "bad") return <span style={{ color: "#D9534F", fontSize: size, fontWeight: 700 }}>✕</span>;
+    return <span style={{ color: COLORS.textDim, fontSize: size }}>—</span>;
+  };
+
+  const fmtValue = (ind, val) => {
+    if (val == null || isNaN(val)) return "—";
+    return val.toFixed(2) + ind.unit;
+  };
+
+  const formatPeriodHeader = (d) => d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+  // Group indicators by category
+  const grouped = {};
+  RECESSION_INDICATORS.forEach(ind => {
+    if (!grouped[ind.category]) grouped[ind.category] = [];
+    grouped[ind.category].push(ind);
+  });
+
+  return (
+    <div>
+      {/* Header */}
+      <Card style={{ padding: 18, marginBottom: 16, background: `linear-gradient(135deg, ${COLORS.bg} 0%, ${COLORS.surface} 100%)`, borderTop: `3px solid ${COLORS.primary}` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: COLORS.primary }} />
+              <div style={{ fontSize: 11, color: COLORS.primary, textTransform: "uppercase", letterSpacing: 2, fontWeight: 700 }}>PointerOS Recession Monitor</div>
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>US Recession Risk Indicators</div>
+            <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4, lineHeight: 1.5, maxWidth: 720 }}>
+              12 indicators across Consumer, Business Activity, and Financial buckets — all sourced from FRED. Each indicator's threshold is editable. Signals: <b style={{ color: "#1FB67D" }}>↑ Expansion</b>, <b style={{ color: "#EAC82E" }}>● Caution</b>, <b style={{ color: "#D9534F" }}>✕ Recession</b>.
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {!editingThresholds && (
+              <Button size="sm" variant="ghost" onClick={() => setEditingThresholds(true)}>Edit Thresholds</Button>
+            )}
+            {editingThresholds && (
+              <>
+                <Button size="sm" variant="ghost" onClick={resetThresholds}>Reset defaults</Button>
+                <Button size="sm" onClick={saveThresholds}>Save</Button>
+              </>
+            )}
+            <Button size="sm" variant="ghost" onClick={loadAll} disabled={loading}>{loading ? `${progress.done}/${progress.total}…` : "↻ Reload"}</Button>
+          </div>
+        </div>
+        {loading && (
+          <div style={{ marginTop: 10, height: 4, background: COLORS.bg, borderRadius: 2, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${(progress.done / progress.total) * 100}%`, background: COLORS.primary, transition: "width 0.2s" }} />
+          </div>
+        )}
+        {error && <div style={{ marginTop: 10, padding: 8, background: COLORS.danger + "11", borderRadius: 6, fontSize: 11, color: COLORS.danger }}>{error}</div>}
+      </Card>
+
+      {/* The grid */}
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ background: COLORS.primary, color: "white" }}>
+              <th style={{ padding: "10px 14px", textAlign: "left", width: 130 }}></th>
+              <th style={{ padding: "10px 14px", textAlign: "left" }}>Indicator</th>
+              {periodDates.map((d, i) => (
+                <th key={i} style={{ padding: "10px 14px", textAlign: "center", fontWeight: 700 }}>{formatPeriodHeader(d)}</th>
+              ))}
+              {editingThresholds && (
+                <>
+                  <th style={{ padding: "10px 14px", textAlign: "center", background: COLORS.primaryDark }}>Good ≥/≤</th>
+                  <th style={{ padding: "10px 14px", textAlign: "center", background: COLORS.primaryDark }}>Caution ≥/≤</th>
+                </>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(grouped).map(([cat, items]) => (
+              <React.Fragment key={cat}>
+                {items.map((ind, idx) => (
+                  <tr key={ind.id} style={{ borderTop: `1px solid ${COLORS.borderLight}`, background: idx % 2 === 0 ? COLORS.surface : "#FAFBFC" }}>
+                    {idx === 0 && (
+                      <td rowSpan={items.length} style={{ padding: "10px 14px", borderRight: `1px solid ${COLORS.border}`, background: COLORS.bg, fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: 1, color: COLORS.textMuted, verticalAlign: "middle", writingMode: items.length > 3 ? "vertical-rl" : "horizontal-tb", textAlign: "center" }}>
+                        {cat}
+                      </td>
+                    )}
+                    <td style={{ padding: "10px 14px" }}>
+                      <div style={{ fontWeight: 600, color: COLORS.text }}>{ind.label}</div>
+                      <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 2 }}>
+                        <a href={`https://fred.stlouisfed.org/series/${ind.series}`} target="_blank" rel="noopener" style={{ color: COLORS.primary, textDecoration: "none" }}>{ind.series} ↗</a>
+                        <span style={{ marginLeft: 6 }}>{ind.transform === "yoyPct" ? "YoY %" : "level"}</span>
+                      </div>
+                    </td>
+                    {periodDates.map((_, pIdx) => {
+                      const v = indicatorData[ind.id]?.["p" + pIdx]?.value;
+                      const status = scoreValue(ind, v);
+                      return (
+                        <td key={pIdx} style={{ padding: "10px 14px", textAlign: "center" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                            <StatusIcon status={status} size={18} />
+                            <span style={{ fontSize: 12, color: COLORS.textMuted, fontFamily: "ui-monospace, monospace" }}>{fmtValue(ind, v)}</span>
+                          </div>
+                        </td>
+                      );
+                    })}
+                    {editingThresholds && (
+                      <>
+                        <td style={{ padding: "6px 8px", textAlign: "center", background: "#F0F8FE" }}>
+                          <input type="number" step="0.1" value={thresholds[ind.id]?.good ?? ""}
+                            onChange={e => setThresholds(prev => ({ ...prev, [ind.id]: { ...prev[ind.id], good: parseFloat(e.target.value) || 0 } }))}
+                            style={{ width: 60, padding: "3px 6px", fontSize: 11, border: `1px solid ${COLORS.border}`, borderRadius: 4, fontFamily: "inherit", textAlign: "right" }} />
+                        </td>
+                        <td style={{ padding: "6px 8px", textAlign: "center", background: "#F0F8FE" }}>
+                          <input type="number" step="0.1" value={thresholds[ind.id]?.caution ?? ""}
+                            onChange={e => setThresholds(prev => ({ ...prev, [ind.id]: { ...prev[ind.id], caution: parseFloat(e.target.value) || 0 } }))}
+                            style={{ width: 60, padding: "3px 6px", fontSize: 11, border: `1px solid ${COLORS.border}`, borderRadius: 4, fontFamily: "inherit", textAlign: "right" }} />
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+              </React.Fragment>
+            ))}
+            {/* Overall signal row */}
+            <tr style={{ borderTop: `2px solid ${COLORS.primary}`, background: COLORS.bg }}>
+              <td style={{ padding: "12px 14px" }}></td>
+              <td style={{ padding: "12px 14px", fontWeight: 800, color: COLORS.text }}>Overall Signal</td>
+              {overallByPeriod.map((p, i) => (
+                <td key={i} style={{ padding: "12px 14px", textAlign: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <StatusIcon status={p.signal} size={22} />
+                    <span style={{ fontSize: 11, color: COLORS.textMuted }}>
+                      <b style={{ color: "#1FB67D" }}>{p.good}↑</b> / <b style={{ color: "#EAC82E" }}>{p.caution}●</b> / <b style={{ color: "#D9534F" }}>{p.bad}✕</b>
+                    </span>
+                  </div>
+                </td>
+              ))}
+              {editingThresholds && <><td></td><td></td></>}
+            </tr>
+          </tbody>
+        </table>
+      </Card>
+
+      {/* Legend */}
+      <Card style={{ padding: 14, marginTop: 12 }}>
+        <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontWeight: 600 }}>How to read this</div>
+        <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontSize: 12, color: COLORS.text }}>
+          <div><StatusIcon status="good" size={14} /> <b>Expansion</b> — indicator above the good threshold</div>
+          <div><StatusIcon status="caution" size={14} /> <b>Caution</b> — between caution and good</div>
+          <div><StatusIcon status="bad" size={14} /> <b>Recession Risk</b> — past the caution threshold</div>
+        </div>
+        <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 10, lineHeight: 1.5 }}>
+          <b>Overall Signal rule:</b> ≥3 indicators in Recession Risk → Recession signal. ≥4 in Caution OR ≥5 combined Caution+Risk → Caution signal. Otherwise Expansion. Thresholds are PointerOS defaults — owners can edit them via the "Edit Thresholds" button. Data sourced from FRED (St. Louis Fed). Note: ISM PMI and Conference Board Consumer Confidence aren't freely available; we use manufacturer's new orders (AMTMNO) as a PMI proxy.
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// ECONOMIC CALENDAR — last 12 months of FRED releases.
+// Each release shows: date, indicator, actual value, prior period, change.
+// ============================================================
+function EconomicCalendar() {
+  const [releases, setReleases] = useState([]);  // { date, name, series, value, formattedValue, priorValue, change, impact, format, desc }
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [filterImpact, setFilterImpact] = useState("all");  // "all" | "high" | "medium" | "low"
+  const [filterSeries, setFilterSeries] = useState("ALL");
+
+  const loadAll = useCallback(async () => {
+    setLoading(true); setError(null);
+    const all = [];
+    try {
+      for (const rel of CALENDAR_RELEASES) {
+        try {
+          const series = await fetchFRED(rel.series, 400);
+          if (!series || series.length < 2) continue;
+          // For each data point in the last 365 days, generate a row
+          const cutoff = Date.now() - 365 * 24 * 60 * 60 * 1000;
+          for (let i = 1; i < series.length; i++) {
+            const pt = series[i];
+            const ptDate = new Date(pt.date + "T00:00:00").getTime();
+            if (ptDate < cutoff) continue;
+            const prior = series[i - 1];
+            // Format value per the release config
+            let formattedValue, formattedPrior, change;
+            if (rel.format === "yoy") {
+              // YoY % computed against value 12 periods back (approx)
+              const lookback = i >= 12 ? 12 : i;
+              const yearAgo = series[i - lookback];
+              if (!yearAgo) continue;
+              const yoy = ((pt.value - yearAgo.value) / yearAgo.value) * 100;
+              const priorYoy = i >= 13 ? ((prior.value - series[i - 1 - lookback].value) / series[i - 1 - lookback].value) * 100 : null;
+              formattedValue = yoy.toFixed(2) + "% YoY";
+              formattedPrior = priorYoy != null ? priorYoy.toFixed(2) + "% YoY" : "—";
+              change = priorYoy != null ? (yoy - priorYoy) : null;
+            } else if (rel.format === "qoq") {
+              // QoQ % annualized — naive approximation
+              const qoq = ((pt.value - prior.value) / prior.value) * 100 * 4;
+              formattedValue = qoq.toFixed(2) + "%";
+              formattedPrior = "—";
+              change = null;
+            } else if (rel.format === "delta") {
+              // Net change since last period (e.g., NFP delta)
+              const delta = pt.value - prior.value;
+              formattedValue = (delta >= 0 ? "+" : "") + Math.round(delta / 1000).toLocaleString() + "K";
+              formattedPrior = "—";
+              change = delta;
+            } else {
+              // level
+              formattedValue = pt.value.toFixed(2);
+              formattedPrior = prior.value.toFixed(2);
+              change = pt.value - prior.value;
+            }
+            all.push({
+              date: pt.date,
+              releaseId: rel.id,
+              name: rel.name,
+              series: rel.series,
+              rawValue: pt.value,
+              priorRawValue: prior.value,
+              formattedValue,
+              formattedPrior,
+              change,
+              impact: rel.impact,
+              format: rel.format,
+              desc: rel.desc,
+            });
+          }
+        } catch (e) { /* skip series */ }
+      }
+      // Sort by date desc (most recent first)
+      all.sort((a, b) => new Date(b.date) - new Date(a.date));
+      setReleases(all);
+    } catch (e) {
+      setError(e.message);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  const filtered = releases.filter(r => {
+    if (filterImpact !== "all" && r.impact !== filterImpact) return false;
+    if (filterSeries !== "ALL" && r.releaseId !== filterSeries) return false;
+    return true;
+  });
+
+  const impactColor = (impact) => impact === "high" ? COLORS.danger : impact === "medium" ? COLORS.gold : COLORS.textMuted;
+
+  // Project upcoming releases — naive: take last release date + cadence
+  const upcoming = CALENDAR_RELEASES.map(rel => {
+    const last = releases.find(r => r.releaseId === rel.id);
+    if (!last) return null;
+    const lastDate = new Date(last.date + "T00:00:00");
+    let nextDate = new Date(lastDate);
+    if (rel.cadence === "weekly") nextDate.setDate(nextDate.getDate() + 7);
+    else if (rel.cadence === "monthly") nextDate.setMonth(nextDate.getMonth() + 1);
+    else if (rel.cadence === "quarterly") nextDate.setMonth(nextDate.getMonth() + 3);
+    return { ...rel, nextDate };
+  }).filter(Boolean).sort((a, b) => a.nextDate - b.nextDate).slice(0, 5);
+
+  return (
+    <div>
+      {/* Upcoming */}
+      <Card style={{ padding: 16, marginBottom: 16, borderLeft: `4px solid ${COLORS.gold}` }}>
+        <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontWeight: 700 }}>Projected Next Releases</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+          {upcoming.map(u => {
+            const daysUntil = Math.ceil((u.nextDate - new Date()) / (1000 * 60 * 60 * 24));
+            return (
+              <div key={u.id} style={{ padding: 10, background: COLORS.bg, borderRadius: 8, borderLeft: `3px solid ${impactColor(u.impact)}` }}>
+                <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>{u.name}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>
+                  {u.nextDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                </div>
+                <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 2 }}>
+                  ~{daysUntil > 0 ? "in " + daysUntil + "d" : Math.abs(daysUntil) + "d ago"} · {u.cadence}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 10 }}>
+          Projected from last actual release date + cadence. Actual release dates published at BLS.gov / federalreserve.gov.
+        </div>
+      </Card>
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div>
+          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>Impact</div>
+          <select value={filterImpact} onChange={e => setFilterImpact(e.target.value)}
+            style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", background: COLORS.surface }}>
+            <option value="all">All ({releases.length})</option>
+            <option value="high">High ({releases.filter(r => r.impact === "high").length})</option>
+            <option value="medium">Medium ({releases.filter(r => r.impact === "medium").length})</option>
+            <option value="low">Low ({releases.filter(r => r.impact === "low").length})</option>
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>Indicator</div>
+          <select value={filterSeries} onChange={e => setFilterSeries(e.target.value)}
+            style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", background: COLORS.surface }}>
+            <option value="ALL">All indicators</option>
+            {CALENDAR_RELEASES.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        </div>
+        <Button size="sm" variant="ghost" onClick={loadAll} disabled={loading}>{loading ? "Loading…" : "↻ Reload"}</Button>
+      </div>
+
+      {/* Releases table */}
+      {error && (
+        <div style={{ padding: 10, background: COLORS.danger + "11", borderRadius: 6, fontSize: 12, color: COLORS.danger, marginBottom: 12 }}>{error}</div>
+      )}
+      {loading && filtered.length === 0 ? (
+        <div style={{ padding: 40, textAlign: "center", color: COLORS.textMuted, fontSize: 13 }}>Loading 12 months of releases…</div>
+      ) : (
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ maxHeight: 600, overflowY: "auto" }}>
+            <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: COLORS.bg, textAlign: "left", position: "sticky", top: 0 }}>
+                  <th style={{ padding: "10px 14px", fontWeight: 700 }}>Release Date</th>
+                  <th style={{ padding: "10px 14px", fontWeight: 700 }}>Indicator</th>
+                  <th style={{ padding: "10px 14px", fontWeight: 700, textAlign: "right" }}>Actual</th>
+                  <th style={{ padding: "10px 14px", fontWeight: 700, textAlign: "right" }}>Prior</th>
+                  <th style={{ padding: "10px 14px", fontWeight: 700, textAlign: "right" }}>Change</th>
+                  <th style={{ padding: "10px 14px", fontWeight: 700 }}>Impact</th>
+                  <th style={{ padding: "10px 14px", fontWeight: 700 }}>FRED</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length === 0 ? (
+                  <tr><td colSpan={7} style={{ padding: 24, textAlign: "center", color: COLORS.textMuted }}>No releases match the filters.</td></tr>
+                ) : filtered.map((r, i) => (
+                  <tr key={r.releaseId + "-" + r.date + "-" + i} style={{ borderTop: `1px solid ${COLORS.borderLight}` }}>
+                    <td style={{ padding: "8px 14px", whiteSpace: "nowrap", color: COLORS.text, fontWeight: 600 }}>
+                      {new Date(r.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </td>
+                    <td style={{ padding: "8px 14px" }}>
+                      <div style={{ fontWeight: 600 }}>{r.name}</div>
+                      <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 2 }}>{r.desc}</div>
+                    </td>
+                    <td style={{ padding: "8px 14px", textAlign: "right", fontFamily: "ui-monospace, monospace", fontWeight: 700, color: COLORS.text }}>{r.formattedValue}</td>
+                    <td style={{ padding: "8px 14px", textAlign: "right", fontFamily: "ui-monospace, monospace", color: COLORS.textMuted }}>{r.formattedPrior}</td>
+                    <td style={{ padding: "8px 14px", textAlign: "right", fontFamily: "ui-monospace, monospace", fontWeight: 600, color: r.change == null ? COLORS.textMuted : (r.change >= 0 ? COLORS.success : COLORS.danger) }}>
+                      {r.change == null ? "—" : (r.change >= 0 ? "▲ " : "▼ ") + Math.abs(r.change).toFixed(2)}
+                    </td>
+                    <td style={{ padding: "8px 14px" }}>
+                      <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, background: impactColor(r.impact), color: "white", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{r.impact}</span>
+                    </td>
+                    <td style={{ padding: "8px 14px" }}>
+                      <a href={`https://fred.stlouisfed.org/series/${r.series}`} target="_blank" rel="noopener" style={{ fontSize: 11, color: COLORS.primary, textDecoration: "none" }}>{r.series} ↗</a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+      <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 10, lineHeight: 1.5 }}>
+        Showing <b>{filtered.length}</b> releases over the last 12 months from <b>{CALENDAR_RELEASES.length}</b> tracked series. Data from FRED. Consensus forecasts (Bloomberg / Estimize) require a paid feed and aren't shown.
+      </div>
+    </div>
+  );
+}
+
 // RISK PROFILER — 5-question questionnaire → score → recommended model
 // ============================================================
 const RISK_QUESTIONS = [
@@ -6643,6 +7743,498 @@ const RISK_PROFILES = [
   { min: 19, max: 22, name: "Growth",               color: "#0B2853", allocation: "80% Stocks / 18% Bonds / 2% Cash",  desc: "Long-term capital appreciation. Higher volatility. Suitable for 10+ year horizons." },
   { min: 23, max: 25, name: "Aggressive Growth",    color: "#D9534F", allocation: "95% Stocks / 5% Bonds / 0% Cash",   desc: "Maximum long-term growth. High volatility. Significant drawdowns expected. 15+ year horizons only." },
 ];
+
+// ============================================================
+// RISK PROFILE TOOLSUITE
+// Top-level toolsuite (like HR). Sliding-scale, emotional/narrative
+// risk tolerance questionnaire designed to be filled with the client
+// in the room. Generates a profile band + allocation guidance.
+// Mailto handoff: opens user's mail client with a pre-filled summary
+// of the result (user takes a screenshot of the on-screen result for
+// the attachment, since mailto can't carry attachments).
+// History of inquiries persisted to localStorage.
+// ============================================================
+
+// Sliding-scale questions. Each scored 0-100.
+// goodWhen: which end of the slider corresponds to "higher risk capacity".
+// "right" = right end is risk-tolerant. "left" = left end is risk-tolerant.
+// weight is how heavily this contributes to the final score.
+const RISK_SLIDERS = [
+  {
+    id: "horizon",
+    title: "Time Horizon",
+    prompt: "When do you expect to spend most of this money?",
+    leftLabel: "I need to spend it all in the next 2 years",
+    rightLabel: "I have a 20+ year horizon — this is for the next generation",
+    leftEmoji: "⏰",
+    rightEmoji: "🌳",
+    weight: 1.5,
+    goodWhen: "right",
+  },
+  {
+    id: "drawdownReaction",
+    title: "The 30% Drop",
+    prompt: "Yesterday your portfolio was worth $1,000,000. Today it's worth $700,000. How do you feel?",
+    leftLabel: "Sick to my stomach. Calling Matt. Need to sell something now.",
+    rightLabel: "Wouldn't even check my account. Drawdowns are part of the game.",
+    leftEmoji: "😱",
+    rightEmoji: "😎",
+    weight: 2.0,
+    goodWhen: "right",
+  },
+  {
+    id: "pctNeeded",
+    title: "Near-Term Cash Needs",
+    prompt: "What percentage of this portfolio will you need to spend in the next 5 years?",
+    leftLabel: "Almost all of it (90-100%)",
+    rightLabel: "None of it — this is long-term capital (0%)",
+    leftEmoji: "💵",
+    rightEmoji: "🔒",
+    weight: 1.5,
+    goodWhen: "right",
+    displayAs: "percent",  // show "0% needed" / "100% needed" labels
+  },
+  {
+    id: "liquidity",
+    title: "Liquidity Comfort",
+    prompt: "How comfortable are you with money being locked up in private investments, alternatives, or illiquid positions?",
+    leftLabel: "Not at all — I need access to all of it on short notice",
+    rightLabel: "Very comfortable — I'm fine with multi-year lockups for better returns",
+    leftEmoji: "🔓",
+    rightEmoji: "🔐",
+    weight: 1.0,
+    goodWhen: "right",
+  },
+  {
+    id: "experience",
+    title: "Investment Experience",
+    prompt: "How much investment experience do you have?",
+    leftLabel: "First time. I want someone to handle this for me.",
+    rightLabel: "Extensive — I trade options, have managed alternatives, know the cycles.",
+    leftEmoji: "🌱",
+    rightEmoji: "🎓",
+    weight: 0.8,
+    goodWhen: "right",
+  },
+  {
+    id: "lossTolerance",
+    title: "Loss Tolerance",
+    prompt: "If your portfolio dropped 40% and stayed there for 18 months, what would you do?",
+    leftLabel: "Sell everything. Move to cash. I can't lose this money.",
+    rightLabel: "Buy more. Drawdowns are buying opportunities for long-term investors.",
+    leftEmoji: "📉",
+    rightEmoji: "📈",
+    weight: 1.8,
+    goodWhen: "right",
+  },
+];
+
+// Convert weighted-average 0-100 score to a profile band.
+function scoreToProfile(score) {
+  if (score < 20) return RISK_PROFILES[0];     // Conservative
+  if (score < 40) return RISK_PROFILES[1];     // Moderate Conservative
+  if (score < 60) return RISK_PROFILES[2];     // Balanced
+  if (score < 80) return RISK_PROFILES[3];     // Growth
+  return RISK_PROFILES[4];                      // Aggressive Growth
+}
+
+// Single labeled slider component used across all questions.
+function RiskSlider({ slider, value, onChange }) {
+  const display = slider.displayAs === "percent"
+    ? `${100 - value}% needed in 5 years`
+    : `${value} / 100`;
+  return (
+    <div style={{ padding: 18, background: COLORS.surface, borderRadius: 12, border: `1px solid ${COLORS.borderLight}`, marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <div style={{ fontSize: 11, color: COLORS.primary, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 700, marginBottom: 4 }}>{slider.title}</div>
+          <div style={{ fontSize: 14, color: COLORS.text, fontWeight: 600, lineHeight: 1.4 }}>{slider.prompt}</div>
+        </div>
+        <div style={{ background: COLORS.bg, padding: "6px 12px", borderRadius: 6, fontSize: 12, color: COLORS.textMuted, fontFamily: "ui-monospace, monospace", whiteSpace: "nowrap" }}>{display}</div>
+      </div>
+
+      {/* Slider with labeled endpoints */}
+      <div style={{ marginTop: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ fontSize: 22, opacity: 0.7 }}>{slider.leftEmoji}</div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={value}
+            onChange={(e) => onChange(parseInt(e.target.value, 10))}
+            style={{
+              flex: 1,
+              height: 6,
+              borderRadius: 3,
+              appearance: "none",
+              background: `linear-gradient(to right, ${COLORS.primary} 0%, ${COLORS.primary} ${value}%, ${COLORS.border} ${value}%, ${COLORS.border} 100%)`,
+              outline: "none",
+              cursor: "pointer",
+            }}
+          />
+          <div style={{ fontSize: 22, opacity: 0.7 }}>{slider.rightEmoji}</div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, gap: 12 }}>
+          <div style={{ fontSize: 11, color: COLORS.textMuted, maxWidth: "45%", lineHeight: 1.4 }}>{slider.leftLabel}</div>
+          <div style={{ fontSize: 11, color: COLORS.textMuted, maxWidth: "45%", textAlign: "right", lineHeight: 1.4 }}>{slider.rightLabel}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RiskProfileToolsuite({ currentUser, onExit }) {
+  const [page, setPage] = useState("assessment");  // "assessment" | "history" | "settings"
+  // Defaults to middle (50) so it's not biased toward a profile — the advisor
+  // must actually move each slider to confirm the answer.
+  const [values, setValues] = useState(() => {
+    const o = {};
+    RISK_SLIDERS.forEach(s => { o[s.id] = 50; });
+    return o;
+  });
+  const [touched, setTouched] = useState({});  // which sliders user has interacted with
+  const [clientName, setClientName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [advisorNotes, setAdvisorNotes] = useState("");
+  const [submittedAt, setSubmittedAt] = useState(null);  // when current result was saved
+  const [history, setHistory] = useState([]);
+  const [showResult, setShowResult] = useState(false);
+
+  // Load history on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await window.storage.get("pfg-risk-history-v1");
+        if (r?.value) setHistory(JSON.parse(r.value));
+      } catch (e) {}
+    })();
+  }, []);
+
+  // Persist history when it changes
+  const saveHistory = useCallback((next) => {
+    setHistory(next);
+    try { window.storage.set("pfg-risk-history-v1", JSON.stringify(next)); } catch (e) {}
+  }, []);
+
+  const setSliderValue = (id, v) => {
+    setValues(prev => ({ ...prev, [id]: v }));
+    setTouched(prev => ({ ...prev, [id]: true }));
+    if (showResult) setShowResult(false);   // invalidate result if they keep tuning
+  };
+
+  // Compute weighted score 0-100. "goodWhen: right" means raw value already maps
+  // (0=conservative, 100=aggressive). "goodWhen: left" would flip it.
+  const totalWeight = RISK_SLIDERS.reduce((s, q) => s + q.weight, 0);
+  const score = RISK_SLIDERS.reduce((s, q) => {
+    const raw = values[q.id] ?? 50;
+    const oriented = q.goodWhen === "right" ? raw : (100 - raw);
+    return s + (oriented * q.weight);
+  }, 0) / totalWeight;
+  const profile = scoreToProfile(score);
+  const allTouched = RISK_SLIDERS.every(s => touched[s.id]);
+
+  const newAssessment = () => {
+    const o = {};
+    RISK_SLIDERS.forEach(s => { o[s.id] = 50; });
+    setValues(o);
+    setTouched({});
+    setClientName("");
+    setClientEmail("");
+    setAdvisorNotes("");
+    setSubmittedAt(null);
+    setShowResult(false);
+    setPage("assessment");
+  };
+
+  const submitProfile = () => {
+    setShowResult(true);
+    const now = new Date();
+    setSubmittedAt(now);
+    // Save to history
+    const entry = {
+      id: "risk-" + now.getTime(),
+      clientName: clientName.trim() || "(unnamed)",
+      clientEmail: clientEmail.trim(),
+      advisorName: currentUser?.name || "Unknown advisor",
+      advisorEmail: currentUser?.email || "",
+      timestamp: now.toISOString(),
+      score: Math.round(score),
+      profileName: profile.name,
+      allocation: profile.allocation,
+      values: { ...values },
+      advisorNotes: advisorNotes.trim(),
+    };
+    saveHistory([entry, ...history].slice(0, 200));   // cap at 200 entries
+  };
+
+  // Generate mailto for sending summary to the client.
+  const generateMailto = () => {
+    const subject = encodeURIComponent(`Your Risk Profile Assessment — ${profile.name}`);
+    const sliderSummary = RISK_SLIDERS.map(s => {
+      const v = values[s.id];
+      const display = s.displayAs === "percent" ? `${100 - v}% needed in 5 years` : `${v}/100`;
+      return `  • ${s.title}: ${display}`;
+    }).join("\n");
+
+    const body = encodeURIComponent(
+`Hi ${clientName || "[Client]"},
+
+Thanks for sitting down with us to walk through your risk tolerance. Below is a summary of your assessment.
+
+═══════════════════════════════════════════
+RISK PROFILE: ${profile.name.toUpperCase()}
+═══════════════════════════════════════════
+
+Overall score: ${Math.round(score)}/100
+Recommended allocation: ${profile.allocation}
+
+About this profile:
+${profile.desc}
+
+Your answers:
+${sliderSummary}
+
+${advisorNotes ? `Advisor notes:\n${advisorNotes}\n\n` : ""}A screenshot of your full assessment result is attached. Let's discuss next steps when you've had time to look this over.
+
+Best,
+${currentUser?.name || ""}
+Pointer Financial Group
+${currentUser?.email || ""}
+
+—————————————————————————————————————
+This profile is for discussion purposes and is not a recommendation to buy or sell any security. Allocation guidance is a starting point — final portfolio construction will reflect your specific tax situation, account types, and broader financial plan.`
+    );
+    const to = clientEmail ? encodeURIComponent(clientEmail) : "";
+    return `mailto:${to}?subject=${subject}&body=${body}`;
+  };
+
+  const formatDate = (iso) => new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+
+  const navItems = [
+    { key: "assessment", label: "New Assessment", icon: "🎯" },
+    { key: "history",    label: `History (${history.length})`, icon: "📜" },
+  ];
+
+  return (
+    <div style={{ display: "flex", minHeight: "100vh", background: "#EDF2F8", fontFamily: "'DM Sans', 'Segoe UI', sans-serif", color: COLORS.text }}>
+      {/* Sidebar */}
+      <div style={{ width: 220, background: COLORS.surface, boxShadow: "2px 0 12px rgba(0,0,0,0.06)", zIndex: 2, display: "flex", flexDirection: "column", flexShrink: 0, position: "relative" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: COLORS.gold }} />
+        <div style={{ padding: "20px 20px 12px", borderBottom: `1px solid ${COLORS.borderLight}` }}>
+          <button onClick={onExit} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit", display: "block", textAlign: "left" }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.primary }}>PointerOS</div>
+            <div style={{ fontSize: 10, color: COLORS.textDim, letterSpacing: 1.5 }}>Risk Profile</div>
+          </button>
+        </div>
+        <nav style={{ flex: 1, padding: "12px 8px" }}>
+          {navItems.map(n => (
+            <button key={n.key} onClick={() => setPage(n.key)}
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: "none",
+                background: page === n.key ? COLORS.gold + "22" : "transparent",
+                color: page === n.key ? COLORS.text : COLORS.textMuted,
+                fontWeight: page === n.key ? 700 : 500,
+                fontSize: 13, fontFamily: "inherit", cursor: "pointer", textAlign: "left", marginBottom: 4,
+              }}>
+              <span style={{ fontSize: 16 }}>{n.icon}</span>
+              {n.label}
+            </button>
+          ))}
+        </nav>
+        <div style={{ padding: 16, borderTop: `1px solid ${COLORS.borderLight}`, fontSize: 11, color: COLORS.textDim, lineHeight: 1.5 }}>
+          <div style={{ fontWeight: 700, color: COLORS.text, marginBottom: 4 }}>{currentUser?.name}</div>
+          <div>{currentUser?.email}</div>
+        </div>
+        <button onClick={onExit} style={{ margin: 16, padding: "8px 12px", border: `1px solid ${COLORS.border}`, background: COLORS.surface, borderRadius: 8, fontFamily: "inherit", fontSize: 12, color: COLORS.textMuted, cursor: "pointer" }}>
+          ← Back to apps
+        </button>
+      </div>
+
+      {/* Main */}
+      <div style={{ flex: 1, padding: "28px 36px", overflowX: "hidden" }}>
+        {page === "assessment" && (
+          <div style={{ maxWidth: 920, margin: "0 auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
+              <div>
+                <div style={{ fontSize: 11, color: COLORS.gold, textTransform: "uppercase", letterSpacing: 2, fontWeight: 700 }}>Risk Tolerance Assessment</div>
+                <h2 style={{ margin: "4px 0 0", fontSize: 24, fontWeight: 700 }}>Sit with the client. Drag every slider together.</h2>
+                <p style={{ color: COLORS.textMuted, fontSize: 13, margin: "6px 0 0", maxWidth: 640, lineHeight: 1.5 }}>
+                  This is an advisor-led, in-the-room tool. Each slider is a conversation — read the prompt aloud, talk through where they land, drag together. Defaults are intentionally neutral (50) so you commit a position consciously.
+                </p>
+              </div>
+              <button onClick={newAssessment} style={{ padding: "8px 14px", border: `1px solid ${COLORS.border}`, background: COLORS.surface, borderRadius: 8, fontFamily: "inherit", fontSize: 12, color: COLORS.textMuted, cursor: "pointer" }}>
+                ↻ New assessment
+              </button>
+            </div>
+
+            {/* Client header card */}
+            <Card style={{ padding: 18, marginBottom: 18, borderLeft: `4px solid ${COLORS.gold}` }}>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700, marginBottom: 12 }}>Client / Prospect Info</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 10, color: COLORS.textMuted, marginBottom: 4 }}>Client name</div>
+                  <input type="text" value={clientName} onChange={e => setClientName(e.target.value)}
+                    placeholder="Jane Sample"
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: COLORS.textMuted, marginBottom: 4 }}>Client email (for follow-up)</div>
+                  <input type="email" value={clientEmail} onChange={e => setClientEmail(e.target.value)}
+                    placeholder="jane@example.com"
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: COLORS.textMuted, marginBottom: 4 }}>Advisor</div>
+                  <div style={{ padding: "8px 12px", background: COLORS.bg, borderRadius: 6, fontSize: 14, color: COLORS.text, fontWeight: 600 }}>{currentUser?.name}</div>
+                </div>
+              </div>
+            </Card>
+
+            {/* Sliders */}
+            {RISK_SLIDERS.map(s => (
+              <RiskSlider key={s.id} slider={s} value={values[s.id]} onChange={(v) => setSliderValue(s.id, v)} />
+            ))}
+
+            {/* Advisor notes */}
+            <Card style={{ padding: 18, marginTop: 14, marginBottom: 18 }}>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700, marginBottom: 8 }}>Advisor Notes (optional)</div>
+              <textarea value={advisorNotes} onChange={e => setAdvisorNotes(e.target.value)}
+                placeholder="Any context worth recording — life events, behavioral biases observed in conversation, follow-up items, accounts not yet at PFG…"
+                style={{ width: "100%", minHeight: 90, padding: "10px 12px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", resize: "vertical" }} />
+            </Card>
+
+            {/* Submit / Score preview */}
+            {!showResult && (
+              <Card style={{ padding: 18, background: allTouched ? "#FFF8DC" : COLORS.surface, borderLeft: `4px solid ${allTouched ? COLORS.gold : COLORS.border}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: COLORS.textMuted }}>Live score (touch every slider to commit):</div>
+                    <div style={{ fontSize: 32, fontWeight: 800, color: profile.color, marginTop: 4 }}>{Math.round(score)} / 100</div>
+                    <div style={{ fontSize: 14, color: COLORS.textMuted, marginTop: 2 }}>
+                      Indicative profile: <b style={{ color: profile.color }}>{profile.name}</b>
+                    </div>
+                  </div>
+                  <button onClick={submitProfile} disabled={!allTouched}
+                    style={{
+                      padding: "12px 24px",
+                      background: allTouched ? COLORS.primary : COLORS.border,
+                      color: "white",
+                      border: "none",
+                      borderRadius: 10,
+                      fontSize: 14,
+                      fontWeight: 700,
+                      fontFamily: "inherit",
+                      cursor: allTouched ? "pointer" : "not-allowed",
+                      boxShadow: allTouched ? "0 4px 12px rgba(47,172,234,0.3)" : "none",
+                    }}>
+                    {allTouched ? "✓ Commit & Save Profile" : `Touch all sliders (${Object.keys(touched).length}/${RISK_SLIDERS.length})`}
+                  </button>
+                </div>
+              </Card>
+            )}
+
+            {/* Result card */}
+            {showResult && (
+              <Card style={{ padding: 22, marginBottom: 14, background: `linear-gradient(135deg, ${profile.color}11 0%, ${COLORS.surface} 60%)`, borderTop: `4px solid ${profile.color}` }}>
+                <div style={{ fontSize: 11, color: profile.color, textTransform: "uppercase", letterSpacing: 2, fontWeight: 700 }}>Risk Profile · Saved {submittedAt && formatDate(submittedAt.toISOString())}</div>
+                <div style={{ fontSize: 36, fontWeight: 800, color: profile.color, marginTop: 4 }}>{profile.name}</div>
+                <div style={{ fontSize: 16, color: COLORS.text, marginTop: 8, fontWeight: 600 }}>Score: {Math.round(score)} / 100</div>
+                <div style={{ fontSize: 14, color: COLORS.text, marginTop: 12, lineHeight: 1.6 }}>{profile.desc}</div>
+                <div style={{ marginTop: 16, padding: 14, background: COLORS.surface, borderRadius: 8, border: `1px solid ${COLORS.border}` }}>
+                  <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>Recommended allocation</div>
+                  <div style={{ fontSize: 16, color: COLORS.text, marginTop: 4, fontWeight: 700 }}>{profile.allocation}</div>
+                </div>
+                <div style={{ marginTop: 18, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <a href={generateMailto()}
+                    style={{ padding: "10px 20px", background: COLORS.primary, color: "white", borderRadius: 8, textDecoration: "none", fontSize: 13, fontWeight: 700, boxShadow: "0 2px 8px rgba(47,172,234,0.3)" }}>
+                    ✉ Send summary to client
+                  </a>
+                  <button onClick={() => window.print()}
+                    style={{ padding: "10px 20px", background: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                    🖨 Print / Save as PDF
+                  </button>
+                  <button onClick={newAssessment}
+                    style={{ padding: "10px 20px", background: COLORS.surface, color: COLORS.textMuted, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                    ↻ New assessment
+                  </button>
+                </div>
+                <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 12, lineHeight: 1.5 }}>
+                  The email opens in your mail client with a full summary in the body. Take a screenshot of this result card and attach it manually. (Mailto links can't carry attachments — that's a browser limitation.)
+                </div>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {page === "history" && (
+          <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 11, color: COLORS.gold, textTransform: "uppercase", letterSpacing: 2, fontWeight: 700 }}>Assessment History</div>
+              <h2 style={{ margin: "4px 0 0", fontSize: 24, fontWeight: 700 }}>All Saved Risk Profiles</h2>
+              <p style={{ color: COLORS.textMuted, fontSize: 13, margin: "6px 0 0" }}>
+                Local to this browser. {history.length} entries · capped at 200.
+              </p>
+            </div>
+
+            {history.length === 0 ? (
+              <Card style={{ padding: 30, textAlign: "center", color: COLORS.textMuted }}>
+                No assessments yet. Run one from "New Assessment" and it'll appear here.
+              </Card>
+            ) : (
+              <Card style={{ padding: 0, overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: COLORS.bg, textAlign: "left" }}>
+                      <th style={{ padding: "10px 14px", fontWeight: 700 }}>Date</th>
+                      <th style={{ padding: "10px 14px", fontWeight: 700 }}>Client</th>
+                      <th style={{ padding: "10px 14px", fontWeight: 700 }}>Advisor</th>
+                      <th style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700 }}>Score</th>
+                      <th style={{ padding: "10px 14px", fontWeight: 700 }}>Profile</th>
+                      <th style={{ padding: "10px 14px", fontWeight: 700 }}>Notes</th>
+                      <th style={{ padding: "10px 14px", fontWeight: 700 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.map(h => {
+                      const prof = RISK_PROFILES.find(p => p.name === h.profileName) || RISK_PROFILES[2];
+                      return (
+                        <tr key={h.id} style={{ borderTop: `1px solid ${COLORS.borderLight}` }}>
+                          <td style={{ padding: "10px 14px", color: COLORS.textMuted, whiteSpace: "nowrap" }}>{formatDate(h.timestamp)}</td>
+                          <td style={{ padding: "10px 14px" }}>
+                            <div style={{ fontWeight: 600 }}>{h.clientName}</div>
+                            {h.clientEmail && <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 2 }}>{h.clientEmail}</div>}
+                          </td>
+                          <td style={{ padding: "10px 14px", color: COLORS.textMuted }}>{h.advisorName}</td>
+                          <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: prof.color, fontFamily: "ui-monospace, monospace" }}>{h.score}</td>
+                          <td style={{ padding: "10px 14px" }}>
+                            <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: 4, background: prof.color, color: "white", fontSize: 10, fontWeight: 700 }}>{h.profileName}</span>
+                          </td>
+                          <td style={{ padding: "10px 14px", fontSize: 11, color: COLORS.textMuted, maxWidth: 280 }}>
+                            {h.advisorNotes ? (h.advisorNotes.length > 80 ? h.advisorNotes.slice(0, 80) + "…" : h.advisorNotes) : <span style={{ color: COLORS.textDim, fontStyle: "italic" }}>—</span>}
+                          </td>
+                          <td style={{ padding: "10px 14px" }}>
+                            <button onClick={() => {
+                                if (!confirm("Delete this assessment from history? This can't be undone.")) return;
+                                saveHistory(history.filter(x => x.id !== h.id));
+                              }}
+                              style={{ background: "none", border: "none", color: COLORS.danger, fontFamily: "inherit", fontSize: 11, cursor: "pointer" }}>
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </Card>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function RiskProfiler() {
   const [answers, setAnswers] = useState({});
