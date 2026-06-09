@@ -1183,11 +1183,6 @@ function App() {
             </div>
           </div>
 
-          {/* Next 2 weeks economic releases — surfaces dates as soon as you sign in */}
-          <div style={{ marginTop: 32, maxWidth: 1100, marginLeft: "auto", marginRight: "auto" }}>
-            <Next2WeeksWidget />
-          </div>
-
           <div style={{ textAlign: "center", marginTop: 32 }}>
             <button onClick={() => { setCurrentUser(null); setSelectedApp(null); }} style={{ background: "none", border: "none", color: COLORS.textDim, fontSize: 12, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
               <IconLogout size={14} /> Sign out
