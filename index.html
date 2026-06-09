@@ -14,6 +14,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -1181,6 +1182,12 @@ function App() {
               <Badge color={COLORS.gold} style={{ marginTop: 12, color: "#0B2853" }}>Active</Badge>
             </div>
           </div>
+
+          {/* Next 2 weeks economic releases — surfaces dates as soon as you sign in */}
+          <div style={{ marginTop: 32, maxWidth: 1100, marginLeft: "auto", marginRight: "auto" }}>
+            <Next2WeeksWidget />
+          </div>
+
           <div style={{ textAlign: "center", marginTop: 32 }}>
             <button onClick={() => { setCurrentUser(null); setSelectedApp(null); }} style={{ background: "none", border: "none", color: COLORS.textDim, fontSize: 12, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 6 }}>
               <IconLogout size={14} /> Sign out
@@ -3434,18 +3441,140 @@ const RECESSION_THRESHOLDS_KEY = "pfg-recession-thresholds-v1";
 // We pull the last 12 months of releases from FRED for actual values,
 // and project upcoming releases based on historical cadence.
 // ============================================================
+// Each release has cadence rules used to project future dates:
+//  - "nthFridayOfMonth": n=1 means first Friday (NFP/UNRATE)
+//  - "nthBusinessDayOfMonth": typical for CPI/PPI (around BLS schedule)
+//  - "weeklyDow": dayOfWeek = JS day (0=Sun..6=Sat), 4=Thursday for ICSA
+//  - "quarterly": releases ~25 days after quarter-end
+//  - "fomc": dates hardcoded in FOMC_SCHEDULE_2026
 const CALENDAR_RELEASES = [
-  { id: "nfp",     name: "Non-Farm Payrolls",       series: "PAYEMS",  cadence: "monthly", typicalDay: 1, dayOfWeek: 5, impact: "high",   format: "delta", desc: "Monthly net job change (BLS Employment Situation)." },
-  { id: "unrate",  name: "Unemployment Rate",        series: "UNRATE",  cadence: "monthly", typicalDay: 1, dayOfWeek: 5, impact: "high",   format: "level", desc: "U-3 unemployment rate." },
-  { id: "cpi",     name: "CPI (All Items)",          series: "CPIAUCSL", cadence: "monthly", typicalDay: 10, impact: "high",  format: "yoy",   desc: "Consumer Price Index, YoY % change." },
-  { id: "core_cpi",name: "Core CPI",                 series: "CPILFESL", cadence: "monthly", typicalDay: 10, impact: "high",  format: "yoy",   desc: "CPI excluding food and energy, YoY %." },
-  { id: "ppi",     name: "PPI",                      series: "PPIACO",  cadence: "monthly", typicalDay: 11, impact: "medium", format: "yoy",   desc: "Producer Price Index, YoY %." },
-  { id: "retail",  name: "Retail Sales",             series: "RSAFS",   cadence: "monthly", typicalDay: 15, impact: "medium", format: "yoy",   desc: "Advance retail sales, YoY %." },
-  { id: "indpro",  name: "Industrial Production",    series: "INDPRO",  cadence: "monthly", typicalDay: 17, impact: "medium", format: "yoy",   desc: "Industrial production index, YoY %." },
-  { id: "gdp",     name: "GDP (Advance)",            series: "GDPC1",   cadence: "quarterly", typicalDay: 28, impact: "high", format: "qoq",   desc: "Real GDP, QoQ % annualized." },
-  { id: "claims",  name: "Initial Jobless Claims",   series: "ICSA",    cadence: "weekly",  dayOfWeek: 4, impact: "medium", format: "level", desc: "Initial unemployment claims (weekly)." },
-  { id: "permits", name: "Building Permits",         series: "PERMIT",  cadence: "monthly", typicalDay: 18, impact: "low",    format: "yoy",   desc: "Building permits, YoY %." },
+  { id: "nfp",      name: "Non-Farm Payrolls",       series: "PAYEMS",   cadence: "nthFridayOfMonth", n: 1,  impact: "high",   format: "delta", desc: "Monthly net job change (BLS Employment Situation).", typicalDay: 5 },
+  { id: "unrate",   name: "Unemployment Rate",        series: "UNRATE",   cadence: "nthFridayOfMonth", n: 1,  impact: "high",   format: "level", desc: "U-3 unemployment rate.", typicalDay: 5 },
+  { id: "claims",   name: "Initial Jobless Claims",   series: "ICSA",     cadence: "weeklyDow",        dayOfWeek: 4, impact: "medium", format: "level", desc: "Initial unemployment claims (weekly release every Thursday 8:30am ET)." },
+  { id: "cpi",      name: "CPI (All Items)",          series: "CPIAUCSL", cadence: "nthBusinessDayOfMonth", typicalDay: 12, impact: "high",  format: "yoy",   desc: "Consumer Price Index, YoY % change." },
+  { id: "core_cpi", name: "Core CPI",                 series: "CPILFESL", cadence: "nthBusinessDayOfMonth", typicalDay: 12, impact: "high",  format: "yoy",   desc: "CPI excluding food and energy, YoY %." },
+  { id: "ppi",      name: "PPI",                      series: "PPIACO",   cadence: "nthBusinessDayOfMonth", typicalDay: 13, impact: "medium", format: "yoy",   desc: "Producer Price Index, YoY %." },
+  { id: "pce",      name: "PCE Inflation",            series: "PCEPI",    cadence: "nthBusinessDayOfMonth", typicalDay: 30, impact: "high",   format: "yoy",   desc: "Personal Consumption Expenditures price index (Fed's preferred inflation gauge), YoY %." },
+  { id: "core_pce", name: "Core PCE",                 series: "PCEPILFE", cadence: "nthBusinessDayOfMonth", typicalDay: 30, impact: "high",   format: "yoy",   desc: "PCE excluding food and energy, YoY %." },
+  { id: "retail",   name: "Retail Sales",             series: "RSAFS",    cadence: "nthBusinessDayOfMonth", typicalDay: 15, impact: "medium", format: "yoy",   desc: "Advance retail sales, YoY %." },
+  { id: "indpro",   name: "Industrial Production",    series: "INDPRO",   cadence: "nthBusinessDayOfMonth", typicalDay: 17, impact: "medium", format: "yoy",   desc: "Industrial production index, YoY %." },
+  { id: "permits",  name: "Building Permits",         series: "PERMIT",   cadence: "nthBusinessDayOfMonth", typicalDay: 18, impact: "low",    format: "yoy",   desc: "Building permits, YoY %." },
+  { id: "jolts",    name: "JOLTS Job Openings",       series: "JTSJOL",   cadence: "nthBusinessDayOfMonth", typicalDay: 28, impact: "medium", format: "level", desc: "Job Openings and Labor Turnover Survey (BLS), released with ~6-week lag." },
+  { id: "gdp",      name: "GDP (Advance)",            series: "GDPC1",    cadence: "quarterly",            typicalDay: 28, impact: "high",   format: "qoq",   desc: "Real GDP, QoQ % annualized. Advance estimate ~4 weeks after quarter-end." },
+  // FOMC isn't a FRED series — handled separately using FOMC_SCHEDULE_2026
+  { id: "fomc",     name: "FOMC Meeting",             series: null,        cadence: "fomc",                 impact: "high",  format: "fomc",  desc: "Federal Open Market Committee meeting and rate decision." },
 ];
+
+// Project a future release date given a cadence rule and a target month.
+function projectReleaseDate(release, targetMonth /* Date pointing to first of target month */) {
+  const year = targetMonth.getFullYear();
+  const month = targetMonth.getMonth();
+
+  if (release.cadence === "nthFridayOfMonth") {
+    // First Friday of given month
+    const d = new Date(year, month, 1);
+    const firstFridayOffset = (5 - d.getDay() + 7) % 7;  // 5 = Friday in JS Date.getDay
+    return new Date(year, month, 1 + firstFridayOffset + (release.n - 1) * 7);
+  }
+  if (release.cadence === "nthBusinessDayOfMonth") {
+    // typicalDay = calendar day of month (e.g., CPI typically ~12th)
+    // Roll forward to next weekday if it falls on weekend
+    let d = new Date(year, month, release.typicalDay);
+    while (d.getDay() === 0 || d.getDay() === 6) {
+      d.setDate(d.getDate() + 1);
+    }
+    return d;
+  }
+  if (release.cadence === "quarterly") {
+    // GDP advance comes out ~28 days after end of prior quarter.
+    // Months when GDP releases: Jan (Q4 prior), Apr (Q1), Jul (Q2), Oct (Q3)
+    if ([0, 3, 6, 9].includes(month)) {
+      return new Date(year, month, release.typicalDay);
+    }
+    return null;  // no release this month
+  }
+  return null;
+}
+
+// Generate next-N-days of upcoming release dates across all indicators.
+// Returns array sorted by date ascending.
+function projectUpcomingReleases(days = 14) {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+  const out = [];
+
+  for (const rel of CALENDAR_RELEASES) {
+    if (rel.cadence === "weeklyDow") {
+      // Every Thursday from now to cutoff
+      let d = new Date(now);
+      const dow = rel.dayOfWeek;
+      // Find next instance of dayOfWeek strictly after today
+      const daysAhead = (dow - d.getDay() + 7) % 7 || 7;
+      d.setDate(d.getDate() + daysAhead);
+      while (d <= cutoff) {
+        out.push({ ...rel, date: new Date(d) });
+        d.setDate(d.getDate() + 7);
+      }
+    } else if (rel.cadence === "fomc") {
+      // FOMC_SCHEDULE_2026 has 2026 dates; iterate
+      for (const mtg of FOMC_SCHEDULE_2026) {
+        const d = new Date(mtg.date + "T14:00:00");
+        if (d > now && d <= cutoff) {
+          out.push({ ...rel, date: d, fomcLabel: mtg.label, fomcSEP: mtg.sep });
+        }
+      }
+    } else {
+      // Look 2 months ahead to be safe (in case cutoff straddles month boundary)
+      for (let mOffset = 0; mOffset <= 2; mOffset++) {
+        const m = new Date(now.getFullYear(), now.getMonth() + mOffset, 1);
+        const d = projectReleaseDate(rel, m);
+        if (d && d > now && d <= cutoff) {
+          out.push({ ...rel, date: d });
+        }
+      }
+    }
+  }
+  out.sort((a, b) => a.date - b.date);
+  return out;
+}
+
+// Generate next 12 months of upcoming releases (used for the Future tab)
+function projectUpcomingReleases12Months() {
+  const now = new Date();
+  const out = [];
+  // Walk through next 12 months
+  for (let mOffset = 0; mOffset <= 12; mOffset++) {
+    const monthStart = new Date(now.getFullYear(), now.getMonth() + mOffset, 1);
+    for (const rel of CALENDAR_RELEASES) {
+      if (rel.cadence === "weeklyDow") {
+        // For Jobless Claims, project every Thursday of this month
+        let d = new Date(monthStart);
+        const dow = rel.dayOfWeek;
+        const daysAhead = (dow - d.getDay() + 7) % 7;
+        d.setDate(d.getDate() + daysAhead);
+        const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
+        while (d <= monthEnd) {
+          if (d > now) out.push({ ...rel, date: new Date(d) });
+          d.setDate(d.getDate() + 7);
+        }
+      } else if (rel.cadence === "fomc") {
+        // Only project from FOMC_SCHEDULE_2026 — for months beyond 2026 we just skip
+        // (we don't have hardcoded data past the published schedule)
+        for (const mtg of FOMC_SCHEDULE_2026) {
+          const d = new Date(mtg.date + "T14:00:00");
+          if (d.getFullYear() === monthStart.getFullYear() && d.getMonth() === monthStart.getMonth() && d > now) {
+            out.push({ ...rel, date: d, fomcLabel: mtg.label, fomcSEP: mtg.sep });
+          }
+        }
+      } else {
+        const d = projectReleaseDate(rel, monthStart);
+        if (d && d > now) out.push({ ...rel, date: d });
+      }
+    }
+  }
+  out.sort((a, b) => a.date - b.date);
+  return out;
+}
 
 // Key macro indicators
 const KEY_INDICATORS = [
@@ -4404,6 +4533,11 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
               ))}
             </div>
 
+            {/* Next 2 weeks economic releases — always at top of overview */}
+            <div style={{ marginBottom: 16 }}>
+              <Next2WeeksWidget />
+            </div>
+
             {/* PointerOS Signal — top dislocations & momentum */}
             {overviewTab === "signal" && (
               <PointerOSSignal onOpenSector={(s) => setSectorDetail(s)} onOpenStock={(sym) => setStockDetailSymbol(sym)} />
@@ -4683,18 +4817,10 @@ function InvestmentDashboardApp({ currentUser, actualUser, viewAs, setViewAs, pe
                       symbol={r.Symbol}
                       targetPct={r["Target Percent"]}
                       modelName={selectedModel}
-                      morningstarRating={(modelRatings[selectedModel]?.[r.Symbol]) ?? null}
                       canEdit={canEditOwnerStuff}
-                      onRatingChange={(rating) => {
-                        const next = { ...modelRatings, [selectedModel]: { ...(modelRatings[selectedModel] || {}), [r.Symbol]: rating } };
-                        save({ modelRatings: next });
-                      }}
                       onOpenDetail={(sym) => setStockDetailSymbol(sym)}
                     />
                   ))}
-                </div>
-                <div style={{ marginTop: 16, padding: 12, background: COLORS.bg, borderRadius: 6, fontSize: 11, color: COLORS.textDim, lineHeight: 1.5 }}>
-                  <b>About Morningstar Ratings:</b> No free public API exists. Matt and Alex enter these manually by looking up each fund on morningstar.com. Ratings persist locally in PointerOS.
                 </div>
               </Card>
             )}
@@ -4873,9 +4999,9 @@ function FearGreedCard({ data }) {
 // ECONOMIC CALENDAR EDITOR — owners only
 // ============================================================
 // ============================================================
-// MODEL HOLDING ROW — per-position view with YTD, mini chart, Morningstar
+// MODEL HOLDING ROW — per-position view with YTD, mini chart
 // ============================================================
-function ModelHoldingRow({ symbol, targetPct, modelName, morningstarRating, canEdit, onRatingChange, onOpenDetail }) {
+function ModelHoldingRow({ symbol, targetPct, modelName, canEdit, onOpenDetail }) {
   const [data, setData] = useState(null);   // { ytd, last, closes (~YTD daily), ts, oneYear }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -4976,11 +5102,9 @@ function ModelHoldingRow({ symbol, targetPct, modelName, morningstarRating, canE
     return () => { if (bigChartObj.current) { bigChartObj.current.destroy(); bigChartObj.current = null; } };
   }, [expanded, data, symbol]);
 
-  const ratingValue = morningstarRating == null ? "" : String(morningstarRating);
-
   return (
     <div style={{ borderBottom: `1px solid ${COLORS.borderLight}` }}>
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(80px, 110px) minmax(60px, 80px) minmax(70px, 90px) minmax(70px, 90px) minmax(80px, 1fr) minmax(100px, 130px) 30px", gap: 10, alignItems: "center", padding: "12px 4px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(80px, 110px) minmax(60px, 80px) minmax(70px, 90px) minmax(70px, 90px) minmax(80px, 1fr) 30px", gap: 10, alignItems: "center", padding: "12px 4px" }}>
         {/* Symbol — clickable */}
         <div>
           {isCash ? (
@@ -5021,25 +5145,6 @@ function ModelHoldingRow({ symbol, targetPct, modelName, morningstarRating, canE
            loading ? <div style={{ fontSize: 11, color: COLORS.textDim, textAlign: "center", lineHeight: "32px" }}>…</div> :
            error ? <div style={{ fontSize: 11, color: COLORS.textDim, textAlign: "center", lineHeight: "32px" }}>—</div> :
            <canvas ref={sparkRef} />}
-        </div>
-        {/* Morningstar */}
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Morningstar</div>
-          {canEdit ? (
-            <select value={ratingValue} onChange={e => onRatingChange(e.target.value === "" ? null : parseInt(e.target.value))}
-              style={{ padding: "3px 6px", borderRadius: 4, border: `1px solid ${COLORS.border}`, fontSize: 12, fontFamily: "inherit", background: COLORS.surface }}>
-              <option value="">—</option>
-              <option value="1">★</option>
-              <option value="2">★★</option>
-              <option value="3">★★★</option>
-              <option value="4">★★★★</option>
-              <option value="5">★★★★★</option>
-            </select>
-          ) : (
-            <div style={{ fontSize: 14, color: COLORS.gold, fontWeight: 700, letterSpacing: 1 }}>
-              {morningstarRating ? "★".repeat(morningstarRating) + "☆".repeat(5 - morningstarRating) : "—"}
-            </div>
-          )}
         </div>
         {/* Expand chevron */}
         <div style={{ textAlign: "center", color: COLORS.textMuted, cursor: !isCash && data ? "pointer" : "default", fontSize: 14 }}
@@ -7469,32 +7574,81 @@ function RecessionMonitor() {
 // ECONOMIC CALENDAR — last 12 months of FRED releases.
 // Each release shows: date, indicator, actual value, prior period, change.
 // ============================================================
+// ============================================================
+// NEXT 2 WEEKS WIDGET — compact card used on Home + Investment dashboards.
+// Surfaces upcoming economic releases for the next 14 days.
+// ============================================================
+function Next2WeeksWidget({ compact = false }) {
+  const upcoming = useMemo(() => projectUpcomingReleases(14), []);
+  const impactColor = (impact) => impact === "high" ? COLORS.danger : impact === "medium" ? COLORS.gold : COLORS.textMuted;
+
+  if (upcoming.length === 0) {
+    return (
+      <Card style={{ padding: 14, borderLeft: `3px solid ${COLORS.textMuted}` }}>
+        <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700, marginBottom: 6 }}>📅 Next 2 Weeks</div>
+        <div style={{ fontSize: 12, color: COLORS.textMuted, fontStyle: "italic" }}>Nothing on the radar.</div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card style={{ padding: 14, borderLeft: `3px solid ${COLORS.gold}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>📅 Next 2 Weeks — Economic Releases</div>
+        <div style={{ fontSize: 10, color: COLORS.textDim }}>{upcoming.length} events</div>
+      </div>
+      <div style={{ display: compact ? "block" : "grid", gridTemplateColumns: compact ? "none" : "repeat(auto-fit, minmax(220px, 1fr))", gap: 8 }}>
+        {upcoming.slice(0, compact ? 6 : 12).map((r, i) => {
+          const daysUntil = Math.ceil((r.date - new Date()) / (1000 * 60 * 60 * 24));
+          return (
+            <div key={r.id + "-" + i} style={{ padding: "8px 10px", background: COLORS.bg, borderRadius: 6, borderLeft: `3px solid ${impactColor(r.impact)}`, marginBottom: compact ? 6 : 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.text }}>{r.name}</div>
+                <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 3, background: impactColor(r.impact), color: "white", fontWeight: 700, flexShrink: 0 }}>{r.impact.toUpperCase()}</span>
+              </div>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>
+                {r.date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · in {daysUntil}d{r.fomcLabel ? ` · ${r.fomcLabel}` : ""}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
 function EconomicCalendar() {
-  const [releases, setReleases] = useState([]);  // { date, name, series, value, formattedValue, priorValue, change, impact, format, desc }
+  // Sub-tab inside the calendar: "past" (released, last 12 months from FRED) or "future" (projected next 12 months)
+  const [tab, setTab] = useState("past");
+
+  // PAST data
+  const [releases, setReleases] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [filterImpact, setFilterImpact] = useState("all");  // "all" | "high" | "medium" | "low"
+  const [filterImpact, setFilterImpact] = useState("all");
   const [filterSeries, setFilterSeries] = useState("ALL");
+  const [sortBy, setSortBy] = useState("impact");  // "impact" | "date"
+
+  // FUTURE projection (computed locally, no fetch)
+  const [futureFilterImpact, setFutureFilterImpact] = useState("all");
 
   const loadAll = useCallback(async () => {
     setLoading(true); setError(null);
     const all = [];
     try {
       for (const rel of CALENDAR_RELEASES) {
+        if (!rel.series) continue;  // skip FOMC (no FRED series)
         try {
           const series = await fetchFRED(rel.series, 400);
           if (!series || series.length < 2) continue;
-          // For each data point in the last 365 days, generate a row
           const cutoff = Date.now() - 365 * 24 * 60 * 60 * 1000;
           for (let i = 1; i < series.length; i++) {
             const pt = series[i];
             const ptDate = new Date(pt.date + "T00:00:00").getTime();
             if (ptDate < cutoff) continue;
             const prior = series[i - 1];
-            // Format value per the release config
             let formattedValue, formattedPrior, change;
             if (rel.format === "yoy") {
-              // YoY % computed against value 12 periods back (approx)
               const lookback = i >= 12 ? 12 : i;
               const yearAgo = series[i - lookback];
               if (!yearAgo) continue;
@@ -7504,19 +7658,16 @@ function EconomicCalendar() {
               formattedPrior = priorYoy != null ? priorYoy.toFixed(2) + "% YoY" : "—";
               change = priorYoy != null ? (yoy - priorYoy) : null;
             } else if (rel.format === "qoq") {
-              // QoQ % annualized — naive approximation
               const qoq = ((pt.value - prior.value) / prior.value) * 100 * 4;
               formattedValue = qoq.toFixed(2) + "%";
               formattedPrior = "—";
               change = null;
             } else if (rel.format === "delta") {
-              // Net change since last period (e.g., NFP delta)
               const delta = pt.value - prior.value;
               formattedValue = (delta >= 0 ? "+" : "") + Math.round(delta / 1000).toLocaleString() + "K";
               formattedPrior = "—";
               change = delta;
             } else {
-              // level
               formattedValue = pt.value.toFixed(2);
               formattedPrior = prior.value.toFixed(2);
               change = pt.value - prior.value;
@@ -7538,8 +7689,6 @@ function EconomicCalendar() {
           }
         } catch (e) { /* skip series */ }
       }
-      // Sort by date desc (most recent first)
-      all.sort((a, b) => new Date(b.date) - new Date(a.date));
       setReleases(all);
     } catch (e) {
       setError(e.message);
@@ -7547,131 +7696,240 @@ function EconomicCalendar() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => { if (tab === "past") loadAll(); }, [loadAll, tab]);
 
+  const impactRank = { high: 0, medium: 1, low: 2 };
   const filtered = releases.filter(r => {
     if (filterImpact !== "all" && r.impact !== filterImpact) return false;
     if (filterSeries !== "ALL" && r.releaseId !== filterSeries) return false;
     return true;
   });
+  // Sort
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortBy === "impact") {
+      const ir = impactRank[a.impact] - impactRank[b.impact];
+      if (ir !== 0) return ir;
+      return new Date(b.date) - new Date(a.date);  // tiebreak by date desc
+    }
+    return new Date(b.date) - new Date(a.date);   // date desc
+  });
 
   const impactColor = (impact) => impact === "high" ? COLORS.danger : impact === "medium" ? COLORS.gold : COLORS.textMuted;
 
-  // Project upcoming releases — naive: take last release date + cadence
-  const upcoming = CALENDAR_RELEASES.map(rel => {
-    const last = releases.find(r => r.releaseId === rel.id);
-    if (!last) return null;
-    const lastDate = new Date(last.date + "T00:00:00");
-    let nextDate = new Date(lastDate);
-    if (rel.cadence === "weekly") nextDate.setDate(nextDate.getDate() + 7);
-    else if (rel.cadence === "monthly") nextDate.setMonth(nextDate.getMonth() + 1);
-    else if (rel.cadence === "quarterly") nextDate.setMonth(nextDate.getMonth() + 3);
-    return { ...rel, nextDate };
-  }).filter(Boolean).sort((a, b) => a.nextDate - b.nextDate).slice(0, 5);
+  // FUTURE: projected next 12 months
+  const futureReleases = useMemo(() => projectUpcomingReleases12Months(), []);
+  const futureFiltered = futureReleases.filter(r => {
+    if (futureFilterImpact !== "all") return r.impact === futureFilterImpact;
+    return true;
+  });
+  // For Future, also a "Next 14 days" highlight section
+  const next14Days = useMemo(() => projectUpcomingReleases(14), []);
+
+  // Group future releases by month for the calendar view
+  const futureByMonth = useMemo(() => {
+    const groups = {};
+    futureFiltered.forEach(r => {
+      const key = r.date.toLocaleDateString("en-US", { year: "numeric", month: "long" });
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(r);
+    });
+    return groups;
+  }, [futureFiltered]);
 
   return (
     <div>
-      {/* Upcoming */}
-      <Card style={{ padding: 16, marginBottom: 16, borderLeft: `4px solid ${COLORS.gold}` }}>
-        <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontWeight: 700 }}>Projected Next Releases</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
-          {upcoming.map(u => {
-            const daysUntil = Math.ceil((u.nextDate - new Date()) / (1000 * 60 * 60 * 24));
-            return (
-              <div key={u.id} style={{ padding: 10, background: COLORS.bg, borderRadius: 8, borderLeft: `3px solid ${impactColor(u.impact)}` }}>
-                <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>{u.name}</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>
-                  {u.nextDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                </div>
-                <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 2 }}>
-                  ~{daysUntil > 0 ? "in " + daysUntil + "d" : Math.abs(daysUntil) + "d ago"} · {u.cadence}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 10 }}>
-          Projected from last actual release date + cadence. Actual release dates published at BLS.gov / federalreserve.gov.
-        </div>
-      </Card>
-
-      {/* Filters */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
-        <div>
-          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>Impact</div>
-          <select value={filterImpact} onChange={e => setFilterImpact(e.target.value)}
-            style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", background: COLORS.surface }}>
-            <option value="all">All ({releases.length})</option>
-            <option value="high">High ({releases.filter(r => r.impact === "high").length})</option>
-            <option value="medium">Medium ({releases.filter(r => r.impact === "medium").length})</option>
-            <option value="low">Low ({releases.filter(r => r.impact === "low").length})</option>
-          </select>
-        </div>
-        <div>
-          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>Indicator</div>
-          <select value={filterSeries} onChange={e => setFilterSeries(e.target.value)}
-            style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", background: COLORS.surface }}>
-            <option value="ALL">All indicators</option>
-            {CALENDAR_RELEASES.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
-        </div>
-        <Button size="sm" variant="ghost" onClick={loadAll} disabled={loading}>{loading ? "Loading…" : "↻ Reload"}</Button>
+      {/* Past / Future tab switcher */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, padding: 4, background: COLORS.bg, borderRadius: 10, flexWrap: "wrap" }}>
+        {[
+          { key: "past", label: "Past 12 Months — Actual Releases", icon: "◀" },
+          { key: "future", label: "Next 12 Months — Projected", icon: "▶" },
+        ].map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            style={{
+              flex: "1 1 200px", padding: "10px 14px", borderRadius: 8, border: "none",
+              background: tab === t.key ? COLORS.surface : "transparent",
+              color: tab === t.key ? COLORS.primaryDark : COLORS.textMuted,
+              fontWeight: tab === t.key ? 700 : 500,
+              fontSize: 13, fontFamily: "inherit", cursor: "pointer",
+              boxShadow: tab === t.key ? "0 2px 6px rgba(0,0,0,0.08)" : "none",
+              transition: "all 0.15s",
+            }}>
+            <span style={{ marginRight: 6, opacity: 0.8 }}>{t.icon}</span> {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* Releases table */}
-      {error && (
-        <div style={{ padding: 10, background: COLORS.danger + "11", borderRadius: 6, fontSize: 12, color: COLORS.danger, marginBottom: 12 }}>{error}</div>
-      )}
-      {loading && filtered.length === 0 ? (
-        <div style={{ padding: 40, textAlign: "center", color: COLORS.textMuted, fontSize: 13 }}>Loading 12 months of releases…</div>
-      ) : (
-        <Card style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ maxHeight: 600, overflowY: "auto" }}>
-            <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: COLORS.bg, textAlign: "left", position: "sticky", top: 0 }}>
-                  <th style={{ padding: "10px 14px", fontWeight: 700 }}>Release Date</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 700 }}>Indicator</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 700, textAlign: "right" }}>Actual</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 700, textAlign: "right" }}>Prior</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 700, textAlign: "right" }}>Change</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 700 }}>Impact</th>
-                  <th style={{ padding: "10px 14px", fontWeight: 700 }}>FRED</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr><td colSpan={7} style={{ padding: 24, textAlign: "center", color: COLORS.textMuted }}>No releases match the filters.</td></tr>
-                ) : filtered.map((r, i) => (
-                  <tr key={r.releaseId + "-" + r.date + "-" + i} style={{ borderTop: `1px solid ${COLORS.borderLight}` }}>
-                    <td style={{ padding: "8px 14px", whiteSpace: "nowrap", color: COLORS.text, fontWeight: 600 }}>
-                      {new Date(r.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                    </td>
-                    <td style={{ padding: "8px 14px" }}>
-                      <div style={{ fontWeight: 600 }}>{r.name}</div>
-                      <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 2 }}>{r.desc}</div>
-                    </td>
-                    <td style={{ padding: "8px 14px", textAlign: "right", fontFamily: "ui-monospace, monospace", fontWeight: 700, color: COLORS.text }}>{r.formattedValue}</td>
-                    <td style={{ padding: "8px 14px", textAlign: "right", fontFamily: "ui-monospace, monospace", color: COLORS.textMuted }}>{r.formattedPrior}</td>
-                    <td style={{ padding: "8px 14px", textAlign: "right", fontFamily: "ui-monospace, monospace", fontWeight: 600, color: r.change == null ? COLORS.textMuted : (r.change >= 0 ? COLORS.success : COLORS.danger) }}>
-                      {r.change == null ? "—" : (r.change >= 0 ? "▲ " : "▼ ") + Math.abs(r.change).toFixed(2)}
-                    </td>
-                    <td style={{ padding: "8px 14px" }}>
-                      <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, background: impactColor(r.impact), color: "white", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{r.impact}</span>
-                    </td>
-                    <td style={{ padding: "8px 14px" }}>
-                      <a href={`https://fred.stlouisfed.org/series/${r.series}`} target="_blank" rel="noopener" style={{ fontSize: 11, color: COLORS.primary, textDecoration: "none" }}>{r.series} ↗</a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {tab === "past" && (
+        <>
+          {/* Filters */}
+          <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>Sort By</div>
+              <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+                style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", background: COLORS.surface, fontWeight: 600 }}>
+                <option value="impact">Highest impact first</option>
+                <option value="date">Most recent first</option>
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>Impact</div>
+              <select value={filterImpact} onChange={e => setFilterImpact(e.target.value)}
+                style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", background: COLORS.surface }}>
+                <option value="all">All ({releases.length})</option>
+                <option value="high">High ({releases.filter(r => r.impact === "high").length})</option>
+                <option value="medium">Medium ({releases.filter(r => r.impact === "medium").length})</option>
+                <option value="low">Low ({releases.filter(r => r.impact === "low").length})</option>
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>Indicator</div>
+              <select value={filterSeries} onChange={e => setFilterSeries(e.target.value)}
+                style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", background: COLORS.surface }}>
+                <option value="ALL">All indicators</option>
+                {CALENDAR_RELEASES.filter(r => r.series).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </div>
+            <Button size="sm" variant="ghost" onClick={loadAll} disabled={loading}>{loading ? "Loading…" : "↻ Reload"}</Button>
           </div>
-        </Card>
+
+          {error && (
+            <div style={{ padding: 10, background: COLORS.danger + "11", borderRadius: 6, fontSize: 12, color: COLORS.danger, marginBottom: 12 }}>{error}</div>
+          )}
+          {loading && sorted.length === 0 ? (
+            <div style={{ padding: 40, textAlign: "center", color: COLORS.textMuted, fontSize: 13 }}>Loading 12 months of releases…</div>
+          ) : (
+            <Card style={{ padding: 0, overflow: "hidden" }}>
+              <div style={{ maxHeight: 600, overflowY: "auto" }}>
+                <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: COLORS.bg, textAlign: "left", position: "sticky", top: 0 }}>
+                      <th style={{ padding: "10px 14px", fontWeight: 700 }}>Release Date</th>
+                      <th style={{ padding: "10px 14px", fontWeight: 700 }}>Indicator</th>
+                      <th style={{ padding: "10px 14px", fontWeight: 700, textAlign: "right" }}>Actual</th>
+                      <th style={{ padding: "10px 14px", fontWeight: 700, textAlign: "right" }}>Prior</th>
+                      <th style={{ padding: "10px 14px", fontWeight: 700, textAlign: "right" }}>Change</th>
+                      <th style={{ padding: "10px 14px", fontWeight: 700 }}>Impact</th>
+                      <th style={{ padding: "10px 14px", fontWeight: 700 }}>FRED</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sorted.length === 0 ? (
+                      <tr><td colSpan={7} style={{ padding: 24, textAlign: "center", color: COLORS.textMuted }}>No releases match the filters.</td></tr>
+                    ) : sorted.map((r, i) => (
+                      <tr key={r.releaseId + "-" + r.date + "-" + i} style={{ borderTop: `1px solid ${COLORS.borderLight}` }}>
+                        <td style={{ padding: "8px 14px", whiteSpace: "nowrap", color: COLORS.text, fontWeight: 600 }}>
+                          {new Date(r.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </td>
+                        <td style={{ padding: "8px 14px" }}>
+                          <div style={{ fontWeight: 600 }}>{r.name}</div>
+                          <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 2 }}>{r.desc}</div>
+                        </td>
+                        <td style={{ padding: "8px 14px", textAlign: "right", fontFamily: "ui-monospace, monospace", fontWeight: 700, color: COLORS.text }}>{r.formattedValue}</td>
+                        <td style={{ padding: "8px 14px", textAlign: "right", fontFamily: "ui-monospace, monospace", color: COLORS.textMuted }}>{r.formattedPrior}</td>
+                        <td style={{ padding: "8px 14px", textAlign: "right", fontFamily: "ui-monospace, monospace", fontWeight: 600, color: r.change == null ? COLORS.textMuted : (r.change >= 0 ? COLORS.success : COLORS.danger) }}>
+                          {r.change == null ? "—" : (r.change >= 0 ? "▲ " : "▼ ") + Math.abs(r.change).toFixed(2)}
+                        </td>
+                        <td style={{ padding: "8px 14px" }}>
+                          <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, background: impactColor(r.impact), color: "white", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{r.impact}</span>
+                        </td>
+                        <td style={{ padding: "8px 14px" }}>
+                          <a href={`https://fred.stlouisfed.org/series/${r.series}`} target="_blank" rel="noopener" style={{ fontSize: 11, color: COLORS.primary, textDecoration: "none" }}>{r.series} ↗</a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+          <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 10, lineHeight: 1.5 }}>
+            Showing <b>{sorted.length}</b> releases over the last 12 months from <b>{CALENDAR_RELEASES.filter(r => r.series).length}</b> tracked series. Data from FRED. Consensus forecasts (Bloomberg / Estimize) require a paid feed and aren't shown.
+          </div>
+        </>
       )}
-      <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 10, lineHeight: 1.5 }}>
-        Showing <b>{filtered.length}</b> releases over the last 12 months from <b>{CALENDAR_RELEASES.length}</b> tracked series. Data from FRED. Consensus forecasts (Bloomberg / Estimize) require a paid feed and aren't shown.
-      </div>
+
+      {tab === "future" && (
+        <>
+          {/* Next 14 days hero card */}
+          <Card style={{ padding: 16, marginBottom: 16, borderLeft: `4px solid ${COLORS.gold}` }}>
+            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontWeight: 700 }}>Next 14 Days — Key Releases</div>
+            {next14Days.length === 0 ? (
+              <div style={{ fontSize: 12, color: COLORS.textMuted, fontStyle: "italic" }}>Nothing on the radar in the next two weeks.</div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
+                {next14Days.map((r, i) => {
+                  const daysUntil = Math.ceil((r.date - new Date()) / (1000 * 60 * 60 * 24));
+                  return (
+                    <div key={r.id + "-" + i} style={{ padding: 10, background: COLORS.bg, borderRadius: 8, borderLeft: `3px solid ${impactColor(r.impact)}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600 }}>{r.name}</div>
+                        <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 3, background: impactColor(r.impact), color: "white", fontWeight: 700 }}>{r.impact.toUpperCase()}</span>
+                      </div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>
+                        {r.date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                      </div>
+                      <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 2 }}>
+                        in {daysUntil}d{r.fomcLabel ? ` · ${r.fomcLabel}` : ""}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+
+          {/* Future filter */}
+          <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div>
+              <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>Impact</div>
+              <select value={futureFilterImpact} onChange={e => setFutureFilterImpact(e.target.value)}
+                style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", background: COLORS.surface }}>
+                <option value="all">All ({futureReleases.length})</option>
+                <option value="high">High ({futureReleases.filter(r => r.impact === "high").length})</option>
+                <option value="medium">Medium ({futureReleases.filter(r => r.impact === "medium").length})</option>
+                <option value="low">Low ({futureReleases.filter(r => r.impact === "low").length})</option>
+              </select>
+            </div>
+            <div style={{ fontSize: 11, color: COLORS.textDim, marginLeft: "auto", maxWidth: 380, textAlign: "right", lineHeight: 1.5 }}>
+              Projected from typical BLS / Fed release cadence. May differ from official schedule by 1-3 days due to holidays. Verify against <a href="https://www.bls.gov/schedule/" target="_blank" rel="noopener" style={{ color: COLORS.primary }}>bls.gov/schedule</a>.
+            </div>
+          </div>
+
+          {/* Future calendar — grouped by month */}
+          {Object.entries(futureByMonth).map(([monthKey, items]) => (
+            <Card key={monthKey} style={{ padding: 0, overflow: "hidden", marginBottom: 14 }}>
+              <div style={{ padding: "10px 16px", background: COLORS.bg, borderBottom: `1px solid ${COLORS.borderLight}` }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.text }}>{monthKey} <span style={{ color: COLORS.textMuted, fontWeight: 500 }}>· {items.length} releases</span></div>
+              </div>
+              <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                <tbody>
+                  {items.map((r, i) => (
+                    <tr key={r.id + "-" + i} style={{ borderTop: i === 0 ? "none" : `1px solid ${COLORS.borderLight}` }}>
+                      <td style={{ padding: "8px 14px", whiteSpace: "nowrap", color: COLORS.text, fontWeight: 600, width: 130 }}>
+                        {r.date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                      </td>
+                      <td style={{ padding: "8px 14px" }}>
+                        <div style={{ fontWeight: 600 }}>{r.name}{r.fomcLabel ? ` — ${r.fomcLabel}` : ""}</div>
+                        <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 2 }}>{r.desc}</div>
+                      </td>
+                      <td style={{ padding: "8px 14px", textAlign: "right" }}>
+                        <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, background: impactColor(r.impact), color: "white", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{r.impact}</span>
+                      </td>
+                      <td style={{ padding: "8px 14px", textAlign: "right", width: 80 }}>
+                        {r.series && <a href={`https://fred.stlouisfed.org/series/${r.series}`} target="_blank" rel="noopener" style={{ fontSize: 11, color: COLORS.primary, textDecoration: "none" }}>{r.series} ↗</a>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          ))}
+
+          <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 10, lineHeight: 1.5 }}>
+            <b>{futureFiltered.length}</b> projected releases over the next 12 months. Includes monthly BLS data (NFP, CPI, PCE), weekly Jobless Claims, quarterly GDP, and scheduled FOMC meetings.
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -7766,8 +8024,6 @@ const RISK_SLIDERS = [
     prompt: "When do you expect to spend most of this money?",
     leftLabel: "I need to spend it all in the next 2 years",
     rightLabel: "I have a 20+ year horizon — this is for the next generation",
-    leftEmoji: "⏰",
-    rightEmoji: "🌳",
     weight: 1.5,
     goodWhen: "right",
   },
@@ -7777,8 +8033,6 @@ const RISK_SLIDERS = [
     prompt: "Yesterday your portfolio was worth $1,000,000. Today it's worth $700,000. How do you feel?",
     leftLabel: "Sick to my stomach. Calling Matt. Need to sell something now.",
     rightLabel: "Wouldn't even check my account. Drawdowns are part of the game.",
-    leftEmoji: "😱",
-    rightEmoji: "😎",
     weight: 2.0,
     goodWhen: "right",
   },
@@ -7788,8 +8042,6 @@ const RISK_SLIDERS = [
     prompt: "What percentage of this portfolio will you need to spend in the next 5 years?",
     leftLabel: "Almost all of it (90-100%)",
     rightLabel: "None of it — this is long-term capital (0%)",
-    leftEmoji: "💵",
-    rightEmoji: "🔒",
     weight: 1.5,
     goodWhen: "right",
     displayAs: "percent",  // show "0% needed" / "100% needed" labels
@@ -7800,8 +8052,6 @@ const RISK_SLIDERS = [
     prompt: "How comfortable are you with money being locked up in private investments, alternatives, or illiquid positions?",
     leftLabel: "Not at all — I need access to all of it on short notice",
     rightLabel: "Very comfortable — I'm fine with multi-year lockups for better returns",
-    leftEmoji: "🔓",
-    rightEmoji: "🔐",
     weight: 1.0,
     goodWhen: "right",
   },
@@ -7811,8 +8061,6 @@ const RISK_SLIDERS = [
     prompt: "How much investment experience do you have?",
     leftLabel: "First time. I want someone to handle this for me.",
     rightLabel: "Extensive — I trade options, have managed alternatives, know the cycles.",
-    leftEmoji: "🌱",
-    rightEmoji: "🎓",
     weight: 0.8,
     goodWhen: "right",
   },
@@ -7822,8 +8070,6 @@ const RISK_SLIDERS = [
     prompt: "If your portfolio dropped 40% and stayed there for 18 months, what would you do?",
     leftLabel: "Sell everything. Move to cash. I can't lose this money.",
     rightLabel: "Buy more. Drawdowns are buying opportunities for long-term investors.",
-    leftEmoji: "📉",
-    rightEmoji: "📈",
     weight: 1.8,
     goodWhen: "right",
   },
@@ -7855,28 +8101,24 @@ function RiskSlider({ slider, value, onChange }) {
 
       {/* Slider with labeled endpoints */}
       <div style={{ marginTop: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ fontSize: 22, opacity: 0.7 }}>{slider.leftEmoji}</div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="1"
-            value={value}
-            onChange={(e) => onChange(parseInt(e.target.value, 10))}
-            style={{
-              flex: 1,
-              height: 6,
-              borderRadius: 3,
-              appearance: "none",
-              background: `linear-gradient(to right, ${COLORS.primary} 0%, ${COLORS.primary} ${value}%, ${COLORS.border} ${value}%, ${COLORS.border} 100%)`,
-              outline: "none",
-              cursor: "pointer",
-            }}
-          />
-          <div style={{ fontSize: 22, opacity: 0.7 }}>{slider.rightEmoji}</div>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, gap: 12 }}>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          value={value}
+          onChange={(e) => onChange(parseInt(e.target.value, 10))}
+          style={{
+            width: "100%",
+            height: 6,
+            borderRadius: 3,
+            appearance: "none",
+            background: `linear-gradient(to right, ${COLORS.primary} 0%, ${COLORS.primary} ${value}%, ${COLORS.border} ${value}%, ${COLORS.border} 100%)`,
+            outline: "none",
+            cursor: "pointer",
+          }}
+        />
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, gap: 12 }}>
           <div style={{ fontSize: 11, color: COLORS.textMuted, maxWidth: "45%", lineHeight: 1.4 }}>{slider.leftLabel}</div>
           <div style={{ fontSize: 11, color: COLORS.textMuted, maxWidth: "45%", textAlign: "right", lineHeight: 1.4 }}>{slider.rightLabel}</div>
         </div>
@@ -7897,7 +8139,6 @@ function RiskProfileToolsuite({ currentUser, onExit }) {
   const [touched, setTouched] = useState({});  // which sliders user has interacted with
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
-  const [advisorNotes, setAdvisorNotes] = useState("");
   const [submittedAt, setSubmittedAt] = useState(null);  // when current result was saved
   const [history, setHistory] = useState([]);
   const [showResult, setShowResult] = useState(false);
@@ -7942,7 +8183,6 @@ function RiskProfileToolsuite({ currentUser, onExit }) {
     setTouched({});
     setClientName("");
     setClientEmail("");
-    setAdvisorNotes("");
     setSubmittedAt(null);
     setShowResult(false);
     setPage("assessment");
@@ -7964,7 +8204,6 @@ function RiskProfileToolsuite({ currentUser, onExit }) {
       profileName: profile.name,
       allocation: profile.allocation,
       values: { ...values },
-      advisorNotes: advisorNotes.trim(),
     };
     saveHistory([entry, ...history].slice(0, 200));   // cap at 200 entries
   };
@@ -7996,7 +8235,7 @@ ${profile.desc}
 Your answers:
 ${sliderSummary}
 
-${advisorNotes ? `Advisor notes:\n${advisorNotes}\n\n` : ""}A screenshot of your full assessment result is attached. Let's discuss next steps when you've had time to look this over.
+The PDF summary of your full assessment is attached. Let's discuss next steps when you've had time to look this over.
 
 Best,
 ${currentUser?.name || ""}
@@ -8008,6 +8247,204 @@ This profile is for discussion purposes and is not a recommendation to buy or se
     );
     const to = clientEmail ? encodeURIComponent(clientEmail) : "";
     return `mailto:${to}?subject=${subject}&body=${body}`;
+  };
+
+  // Generate one-page branded PDF using jsPDF.
+  // Layout:
+  //  - Top: PointerOS gold header band with title
+  //  - Client/advisor/date info row
+  //  - Big profile band with allocation
+  //  - Score bar visualization
+  //  - 6-row slider results table
+  //  - Footer with disclaimer
+  // Page: US Letter (8.5" x 11"), portrait, 0.5" margins.
+  const downloadPDF = () => {
+    if (!window.jspdf) {
+      alert("PDF library not loaded. Please refresh and try again.");
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: "pt", format: "letter", orientation: "portrait" });
+
+    const pageWidth = 612;   // 8.5 inches × 72 pt/in
+    const pageHeight = 792;  // 11 inches
+    const margin = 40;
+    const contentWidth = pageWidth - margin * 2;
+
+    // === HEADER BAND ===
+    // Navy band 60pt tall with gold accent
+    doc.setFillColor(11, 40, 83);  // #0B2853 navy
+    doc.rect(0, 0, pageWidth, 70, "F");
+    doc.setFillColor(234, 200, 46);  // #EAC82E gold
+    doc.rect(0, 70, pageWidth, 4, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.text("PointerOS", margin, 38);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(234, 200, 46);
+    doc.text("RISK TOLERANCE ASSESSMENT", margin, 56);
+
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    doc.text("Pointer Financial Group", pageWidth - margin, 38, { align: "right" });
+    doc.text("Confidential — Discussion Document", pageWidth - margin, 52, { align: "right" });
+
+    // === CLIENT INFO ROW ===
+    let y = 100;
+    doc.setTextColor(60, 60, 60);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("CLIENT", margin, y);
+    doc.text("ADVISOR", margin + 200, y);
+    doc.text("DATE", margin + 400, y);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.setTextColor(20, 20, 20);
+    doc.text(clientName || "(unnamed)", margin, y + 16);
+    doc.text(currentUser?.name || "—", margin + 200, y + 16);
+    doc.text(new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }), margin + 400, y + 16);
+
+    // === PROFILE BAND HERO ===
+    y = 150;
+    // Hex → RGB for the profile color
+    const hexToRgb = (hex) => {
+      const m = hex.replace("#", "").match(/.{2}/g);
+      return m ? m.map(c => parseInt(c, 16)) : [100, 100, 100];
+    };
+    const [pr, pg, pb] = hexToRgb(profile.color);
+    doc.setFillColor(pr, pg, pb);
+    doc.rect(margin, y, contentWidth, 80, "F");
+    // Lightened band beneath
+    doc.setFillColor(248, 250, 252);
+    doc.rect(margin, y + 80, contentWidth, 28, "F");
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("RISK PROFILE", margin + 20, y + 22);
+    doc.setFontSize(26);
+    doc.text(profile.name.toUpperCase(), margin + 20, y + 50);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.text(`Score: ${Math.round(score)} / 100`, margin + 20, y + 70);
+
+    // Allocation strip
+    doc.setTextColor(80, 80, 80);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text("RECOMMENDED ALLOCATION", margin + 20, y + 95);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.setTextColor(20, 20, 20);
+    doc.text(profile.allocation, margin + 20, y + 105);
+
+    // === SCORE BAR ===
+    y = 280;
+    doc.setTextColor(60, 60, 60);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("RISK CAPACITY SCALE", margin, y);
+
+    // Background bar (gray)
+    doc.setFillColor(229, 229, 229);
+    doc.rect(margin, y + 10, contentWidth, 14, "F");
+    // Filled portion
+    const fillWidth = (score / 100) * contentWidth;
+    doc.setFillColor(pr, pg, pb);
+    doc.rect(margin, y + 10, fillWidth, 14, "F");
+
+    // Tick marks under the bar with band labels
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(120, 120, 120);
+    const bands = ["Conservative", "Mod. Cons.", "Balanced", "Growth", "Aggressive"];
+    bands.forEach((band, i) => {
+      const x = margin + (contentWidth * i / 4);
+      doc.text(band, x, y + 38, { align: i === 0 ? "left" : i === bands.length - 1 ? "right" : "center" });
+    });
+
+    // === SLIDER ANSWERS TABLE ===
+    y = 340;
+    doc.setTextColor(60, 60, 60);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("YOUR ANSWERS", margin, y);
+
+    y += 14;
+    // Table header
+    doc.setFillColor(247, 249, 251);
+    doc.rect(margin, y, contentWidth, 18, "F");
+    doc.setFontSize(8);
+    doc.text("DIMENSION", margin + 8, y + 12);
+    doc.text("RESPONSE", margin + contentWidth - 8, y + 12, { align: "right" });
+
+    y += 18;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(40, 40, 40);
+    doc.setFontSize(10);
+
+    RISK_SLIDERS.forEach((slider, i) => {
+      const v = values[slider.id] ?? 50;
+      const display = slider.displayAs === "percent" ? `${100 - v}% needed in 5 years` : `${v} / 100`;
+      // Row stripe
+      if (i % 2 === 0) {
+        doc.setFillColor(252, 253, 254);
+        doc.rect(margin, y, contentWidth, 28, "F");
+      }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(20, 20, 20);
+      doc.text(slider.title, margin + 8, y + 12);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(120, 120, 120);
+      // Position label (which end of spectrum)
+      const positionLabel = v < 25 ? slider.leftLabel : v > 75 ? slider.rightLabel : "Middle ground";
+      const truncatedLabel = positionLabel.length > 70 ? positionLabel.slice(0, 70) + "…" : positionLabel;
+      doc.text(truncatedLabel, margin + 8, y + 24);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(20, 20, 20);
+      doc.text(display, margin + contentWidth - 8, y + 18, { align: "right" });
+
+      y += 28;
+    });
+
+    // === PROFILE DESCRIPTION ===
+    y += 8;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(60, 60, 60);
+    doc.text("PROFILE NOTES", margin, y);
+    y += 14;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(40, 40, 40);
+    const wrapped = doc.splitTextToSize(profile.desc, contentWidth);
+    doc.text(wrapped, margin, y);
+    y += wrapped.length * 12;
+
+    // === FOOTER ===
+    const footerY = pageHeight - 70;
+    doc.setDrawColor(229, 229, 229);
+    doc.line(margin, footerY, pageWidth - margin, footerY);
+    doc.setFontSize(7);
+    doc.setTextColor(140, 140, 140);
+    const footerText = "This Risk Profile is for discussion purposes only and is not a recommendation to buy or sell any security. The recommended allocation is a starting point — final portfolio construction will reflect specific tax situation, account types, and broader financial plan. Profile validity assumes financial circumstances and goals remain materially unchanged.";
+    const footerWrapped = doc.splitTextToSize(footerText, contentWidth);
+    doc.text(footerWrapped, margin, footerY + 14);
+    doc.text(`Generated ${new Date().toLocaleString("en-US")}  •  PointerOS / Pointer Financial Group`, margin, pageHeight - 18);
+
+    // Save
+    const safeClient = (clientName || "client").replace(/[^\w-]+/g, "_").slice(0, 40);
+    const dateStr = new Date().toISOString().split("T")[0];
+    doc.save(`RiskProfile_${safeClient}_${dateStr}.pdf`);
   };
 
   const formatDate = (iso) => new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
@@ -8096,14 +8533,6 @@ This profile is for discussion purposes and is not a recommendation to buy or se
               <RiskSlider key={s.id} slider={s} value={values[s.id]} onChange={(v) => setSliderValue(s.id, v)} />
             ))}
 
-            {/* Advisor notes */}
-            <Card style={{ padding: 18, marginTop: 14, marginBottom: 18 }}>
-              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700, marginBottom: 8 }}>Advisor Notes (optional)</div>
-              <textarea value={advisorNotes} onChange={e => setAdvisorNotes(e.target.value)}
-                placeholder="Any context worth recording — life events, behavioral biases observed in conversation, follow-up items, accounts not yet at PFG…"
-                style={{ width: "100%", minHeight: 90, padding: "10px 12px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", resize: "vertical" }} />
-            </Card>
-
             {/* Submit / Score preview */}
             {!showResult && (
               <Card style={{ padding: 18, background: allTouched ? "#FFF8DC" : COLORS.surface, borderLeft: `4px solid ${allTouched ? COLORS.gold : COLORS.border}` }}>
@@ -8150,9 +8579,9 @@ This profile is for discussion purposes and is not a recommendation to buy or se
                     style={{ padding: "10px 20px", background: COLORS.primary, color: "white", borderRadius: 8, textDecoration: "none", fontSize: 13, fontWeight: 700, boxShadow: "0 2px 8px rgba(47,172,234,0.3)" }}>
                     ✉ Send summary to client
                   </a>
-                  <button onClick={() => window.print()}
-                    style={{ padding: "10px 20px", background: COLORS.surface, color: COLORS.text, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                    🖨 Print / Save as PDF
+                  <button onClick={downloadPDF}
+                    style={{ padding: "10px 20px", background: COLORS.gold, color: COLORS.primaryDark, border: "none", borderRadius: 8, fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: "0 2px 8px rgba(234,200,46,0.3)" }}>
+                    ⬇ Download PDF
                   </button>
                   <button onClick={newAssessment}
                     style={{ padding: "10px 20px", background: COLORS.surface, color: COLORS.textMuted, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
@@ -8160,7 +8589,7 @@ This profile is for discussion purposes and is not a recommendation to buy or se
                   </button>
                 </div>
                 <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 12, lineHeight: 1.5 }}>
-                  The email opens in your mail client with a full summary in the body. Take a screenshot of this result card and attach it manually. (Mailto links can't carry attachments — that's a browser limitation.)
+                  Download the one-page PDF, then send to your client. The email link opens your mail client pre-filled with a summary — attach the downloaded PDF manually.
                 </div>
               </Card>
             )}
@@ -8191,7 +8620,6 @@ This profile is for discussion purposes and is not a recommendation to buy or se
                       <th style={{ padding: "10px 14px", fontWeight: 700 }}>Advisor</th>
                       <th style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700 }}>Score</th>
                       <th style={{ padding: "10px 14px", fontWeight: 700 }}>Profile</th>
-                      <th style={{ padding: "10px 14px", fontWeight: 700 }}>Notes</th>
                       <th style={{ padding: "10px 14px", fontWeight: 700 }}></th>
                     </tr>
                   </thead>
@@ -8209,9 +8637,6 @@ This profile is for discussion purposes and is not a recommendation to buy or se
                           <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: prof.color, fontFamily: "ui-monospace, monospace" }}>{h.score}</td>
                           <td style={{ padding: "10px 14px" }}>
                             <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: 4, background: prof.color, color: "white", fontSize: 10, fontWeight: 700 }}>{h.profileName}</span>
-                          </td>
-                          <td style={{ padding: "10px 14px", fontSize: 11, color: COLORS.textMuted, maxWidth: 280 }}>
-                            {h.advisorNotes ? (h.advisorNotes.length > 80 ? h.advisorNotes.slice(0, 80) + "…" : h.advisorNotes) : <span style={{ color: COLORS.textDim, fontStyle: "italic" }}>—</span>}
                           </td>
                           <td style={{ padding: "10px 14px" }}>
                             <button onClick={() => {
