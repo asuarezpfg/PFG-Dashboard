@@ -74,32 +74,56 @@ async function hashPassword(plainText) {
 }
 
 const INITIAL_PEOPLE = [
-  { id: "p1", name: "Matt Bruce", username: "mbruce", role: "Advisor", email: "matt@pointerfg.com", active: true, passwordHash: null, isAdmin: true, isOwner: true, birthday: "1982-07-06", dateOfHire: "2019-03-04", enrolled401k: true,
+  { id: "p1", name: "Matt Bruce", credentials: "CFP®, AIF®", username: "mbruce", role: "President", email: "mbruce@pointerfg.com",
+    profileUrl: "https://www.pointerfg.com/mattbruce",
+    photoUrl: "https://images.squarespace-cdn.com/content/v1/61cb8d63ca1b4612b6cf6632/1659620797389-FEJB9YL524LQ5TW0DGQ8/20220712-02.jpg",
+    active: true, passwordHash: null, isAdmin: true, isOwner: true, birthday: "1982-07-06", dateOfHire: "2019-03-04", enrolled401k: true,
+    ptoApplicable: false,
     ptoAllot: 20, ptoUsed: 0, unpaid: 0,
     ptoHistory: { "2024": { allot: 20, used: 0, carriedIn: 0 }, "2025": { allot: 20, used: 0, carriedIn: 20 }, "2026": { allot: 20, used: 0, carriedIn: 40 } },
     militaryLeaves: [], unpaidLeaves: [] },
-  { id: "p2", name: "Shelly Wohler", username: "swohler", role: "Advisor", email: "shelly@pointerfg.com", active: true, passwordHash: null, isAdmin: false, isOwner: false, birthday: "1988-11-14", dateOfHire: "2020-05-18", enrolled401k: true,
+  { id: "p2", name: "Shelly Wohler", credentials: "CPFA®", username: "swohler", role: "Advisor", email: "swohler@pointerfg.com",
+    profileUrl: "https://www.pointerfg.com/shellywohler",
+    photoUrl: "https://images.squarespace-cdn.com/content/v1/61cb8d63ca1b4612b6cf6632/2462a694-a832-4082-b750-7eb650ffc1af/20220712-09.jpg",
+    active: true, passwordHash: null, isAdmin: false, isOwner: false, birthday: "1988-11-14", dateOfHire: "2020-05-18", enrolled401k: true,
+    ptoApplicable: false,
     ptoAllot: 18, ptoUsed: 0, unpaid: 0,
     ptoHistory: { "2024": { allot: 18, used: 0, carriedIn: 0 }, "2025": { allot: 18, used: 0, carriedIn: 18 }, "2026": { allot: 18, used: 0, carriedIn: 36 } },
     militaryLeaves: [], unpaidLeaves: [] },
-  { id: "p3", name: "Avery Core-Dickinson", username: "acore", role: "Educator", email: "avery@pointerfg.com", active: true, passwordHash: null, isAdmin: false, isOwner: false, birthday: "1999-04-18", dateOfHire: "2022-09-12", enrolled401k: false,
+  { id: "p3", name: "Avery Corey-Dickinson", credentials: "", username: "acorey", role: "Investment Analyst", email: "acorey@pointerfg.com",
+    profileUrl: "https://www.pointerfg.com/averycoreydickinson",
+    photoUrl: "https://images.squarespace-cdn.com/content/v1/61cb8d63ca1b4612b6cf6632/e9d9dad7-1666-401b-8725-28d2252dbd79/AveryCD_Pointer-3.jpg",
+    active: true, passwordHash: null, isAdmin: false, isOwner: false, birthday: "1999-04-18", dateOfHire: "2022-09-12", enrolled401k: false,
     ptoAllot: 15, ptoUsed: 0, unpaid: 0,
     ptoHistory: { "2024": { allot: 15, used: 0, carriedIn: 0 }, "2025": { allot: 15, used: 0, carriedIn: 15 }, "2026": { allot: 15, used: 0, carriedIn: 30 } },
     militaryLeaves: [], unpaidLeaves: [] },
-  { id: "p4", name: "Naomi Chang", username: "nchang", role: "Relationship Manager", email: "naomi@pointerfg.com", active: true, passwordHash: null, isAdmin: false, isOwner: false, birthday: "1990-06-30", dateOfHire: "2021-11-08", enrolled401k: true,
+  { id: "p4", name: "Naomi Chang", credentials: "", username: "nchang", role: "Relationship Manager", email: "nchang@pointerfg.com",
+    profileUrl: "https://www.pointerfg.com/naomichang",
+    photoUrl: "https://images.squarespace-cdn.com/content/v1/61cb8d63ca1b4612b6cf6632/9dd29e45-7c24-4f6b-8b70-a2f052075093/FSC_7019.jpg",
+    active: true, passwordHash: null, isAdmin: false, isOwner: false, birthday: "1990-06-30", dateOfHire: "2021-11-08", enrolled401k: true,
     ptoAllot: 15, ptoUsed: 0, unpaid: 0,
     ptoHistory: { "2024": { allot: 15, used: 0, carriedIn: 0 }, "2025": { allot: 15, used: 0, carriedIn: 15 }, "2026": { allot: 15, used: 0, carriedIn: 30 } },
     militaryLeaves: [], unpaidLeaves: [] },
-  { id: "p5", name: "Alex Suarez", username: "asuarez", role: "Investment Team", email: "alex@pointerfg.com", active: true, passwordHash: null, isAdmin: true, isOwner: true, birthday: "1990-04-12", dateOfHire: "2024-03-25", enrolled401k: false,
+  { id: "p5", name: "Alex Suarez", credentials: "MBA, AFC®", username: "asuarez", role: "Financial Planning Specialist", email: "asuarez@pointerfg.com",
+    profileUrl: "https://www.pointerfg.com/alexsuarez",
+    photoUrl: "https://images.squarespace-cdn.com/content/v1/61cb8d63ca1b4612b6cf6632/ff4c36c4-4074-4abb-998f-fc6f0bd8c5f5/Pointer_2024-2.jpg",
+    active: true, passwordHash: null, isAdmin: true, isOwner: true, birthday: "1990-04-12", dateOfHire: "2024-03-25", enrolled401k: false,
+    ptoApplicable: false,
     ptoAllot: 20, ptoUsed: 0, unpaid: 0,
     ptoHistory: { "2024": { allot: 20, used: 0, carriedIn: 0 }, "2025": { allot: 20, used: 0, carriedIn: 20 }, "2026": { allot: 20, used: 0, carriedIn: 40 } },
     militaryLeaves: [{ start: "2024-09-13", end: "2025-02-03" }, { start: "2025-03-14", end: "2025-04-21" }, { start: "2025-05-29", end: "2026-04-22" }],
     unpaidLeaves: [] },
-  { id: "p6", name: "Judith", username: "judith", role: "Operations", email: "judith@pointerfg.com", active: true, passwordHash: null, isAdmin: false, isOwner: false, birthday: "1974-02-05", dateOfHire: "2023-01-10", enrolled401k: false,
+  { id: "p6", name: "Judith Phillips", credentials: "", username: "jphillips", role: "Client Service Associate", email: "jphillips@pointerfg.com",
+    profileUrl: "https://www.pointerfg.com/judithphillips",
+    photoUrl: "https://images.squarespace-cdn.com/content/v1/61cb8d63ca1b4612b6cf6632/8692ed18-b0fa-424c-8f6a-cf8cc663276f/Pointer2023-1-2.jpg",
+    active: true, passwordHash: null, isAdmin: false, isOwner: false, birthday: "1974-02-05", dateOfHire: "2023-01-10", enrolled401k: false,
     ptoAllot: 15, ptoUsed: 0, unpaid: 0,
     ptoHistory: { "2024": { allot: 15, used: 0, carriedIn: 0 }, "2025": { allot: 15, used: 0, carriedIn: 15 }, "2026": { allot: 15, used: 0, carriedIn: 30 } },
     militaryLeaves: [], unpaidLeaves: [] },
-  { id: "p7", name: "Jen Mussa", username: "jmussa", role: "Retirement Plan Relationship Manager", email: "jen@pointerfg.com", active: true, passwordHash: null, isAdmin: false, isOwner: false, birthday: null, dateOfHire: "2024-08-12", enrolled401k: false,
+  { id: "p7", name: "Jen Mussa", credentials: "MBA", username: "jmussa", role: "Retirement Plan Relationship Manager", email: "jmussa@pointerfg.com",
+    profileUrl: "https://www.pointerfg.com/jenmussa",
+    photoUrl: "https://images.squarespace-cdn.com/content/v1/61cb8d63ca1b4612b6cf6632/f8072541-a11b-4f6c-a76c-a3784a8fa912/Mussa_Jen-2.jpg",
+    active: true, passwordHash: null, isAdmin: false, isOwner: false, birthday: null, dateOfHire: "2024-08-12", enrolled401k: false,
     ptoAllot: 15, ptoUsed: 0, unpaid: 0,
     ptoHistory: { "2024": { allot: 15, used: 0, carriedIn: 0 }, "2025": { allot: 15, used: 0, carriedIn: 15 }, "2026": { allot: 15, used: 0, carriedIn: 30 } },
     militaryLeaves: [], unpaidLeaves: [] },
@@ -9252,7 +9276,7 @@ function HRToolsuiteApp({ currentUser, actualUser, viewAs, setViewAs, people, on
   const [profileRequests, setProfileRequests] = useState([]); // requests to change locked profile fields
   const [leaveRequests, setLeaveRequests] = useState([]);   // employee time-off requests
   const [hrSettings, setHrSettings] = useState({
-    notifyEmails: ["matt@pointerfg.com", "alex@pointerfg.com"],
+    notifyEmails: ["mbruce@pointerfg.com", "asuarez@pointerfg.com"],
     documents: [], // user-added documents beyond the built-ins
   });
   const [calDate, setCalDate] = useState(new Date());
@@ -9292,7 +9316,9 @@ function HRToolsuiteApp({ currentUser, actualUser, viewAs, setViewAs, people, on
   const navItems = [
     { key: "profile", icon: IconUsers, label: "My Profile" },
     { key: "reimb", icon: IconDollar, label: "Reimbursements" },
-    { key: "leave", icon: IconCalendar, label: "Leave Request" },
+    // Hide "Leave Request" from people whose PTO isn't tracked (Matt, Shelly, Alex).
+    // Masters still see it when viewing as a regular employee.
+    ...(currentUser.ptoApplicable === false ? [] : [{ key: "leave", icon: IconCalendar, label: "Leave Request" }]),
     { key: "calendar", icon: IconCalendar, label: "Calendar" },
     { key: "documents", icon: IconClipboard, label: "Documents" },
     ...(isAdmin ? [{ key: "employees", icon: IconList, label: "Employees" }] : []),
@@ -9498,7 +9524,7 @@ function HRProfileView({ currentUser, reimbursements, people, onUpdatePeople, is
     };
     const next = [...(profileRequests || []), req];
     saveHR({ profileRequests: next });
-    const recipients = hrSettings?.notifyEmails?.length ? hrSettings.notifyEmails : ["matt@pointerfg.com", "alex@pointerfg.com"];
+    const recipients = hrSettings?.notifyEmails?.length ? hrSettings.notifyEmails : ["mbruce@pointerfg.com", "asuarez@pointerfg.com"];
     const body =
 `A profile-field change request has been submitted in PointerOS.
 
@@ -9586,71 +9612,97 @@ Approve or deny in: PointerOS → HR Toolsuite → Employees (admin view).
 
   return (
     <div>
-      {/* PTO Dashboard — first thing employees see, clickable to open ledger */}
-      <Card style={{ padding: 0, marginBottom: 16, overflow: "hidden", cursor: "pointer", transition: "transform 0.15s, box-shadow 0.15s" }}
-            onClick={() => setPtoModalOpen(true)}
-            onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(11,40,83,0.12)"; }}
-            onMouseLeave={e => { e.currentTarget.style.boxShadow = ""; }}
-            title="Click to see year-by-year accrual">
-        <div style={{ padding: "18px 24px 16px", background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDark} 100%)`, color: "white", position: "relative" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      {/* PTO Dashboard — first thing employees see */}
+      {currentUser.ptoApplicable === false ? (
+        // "Not applicable" view for owners/partners (Matt, Shelly, Alex) whose
+        // time off isn't tracked as PTO.
+        <Card style={{ padding: 0, marginBottom: 16, overflow: "hidden" }}>
+          <div style={{ padding: "18px 24px 18px", background: `linear-gradient(135deg, ${COLORS.textMuted} 0%, ${COLORS.text} 100%)`, color: "white" }}>
             <div style={{ fontSize: 11, opacity: 0.85, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600 }}>Time Off</div>
-            <div style={{ fontSize: 11, opacity: 0.85, fontWeight: 600 }}>Click for accrual ↗</div>
-          </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginTop: 6, flexWrap: "wrap" }}>
-            <div>
-              <span style={{ fontSize: 40, fontWeight: 800, lineHeight: 1 }}>{bal}</span>
-              <span style={{ fontSize: 16, opacity: 0.9, marginLeft: 6 }}>days available</span>
+            <div style={{ marginTop: 8 }}>
+              <span style={{ fontSize: 24, fontWeight: 700 }}>Not applicable</span>
             </div>
-            <div style={{ fontSize: 13, opacity: 0.9 }}>
-              {(ptoSummary.years[ptoSummary.years.length - 1]?.carriedIn || 0) > 0
-                ? `${ptoSummary.years[ptoSummary.years.length - 1].allot}-day annual + ${ptoSummary.years[ptoSummary.years.length - 1].carriedIn} carried in`
-                : `${currentUser.ptoAllot || 0}-day annual allotment`}
+            <div style={{ fontSize: 12, opacity: 0.85, marginTop: 8, lineHeight: 1.5, maxWidth: 540 }}>
+              Standard PTO tracking is not applicable to this role. Time off is handled outside the PTO ledger — coordinate directly with the team.
             </div>
           </div>
-          {/* Progress bar relative to "available before using" = allot + carriedIn */}
-          {(() => {
-            const yr = ptoSummary.years[ptoSummary.years.length - 1] || { allot: 0, carriedIn: 0, used: 0 };
-            const total = yr.allot + yr.carriedIn;
-            if (total <= 0) return null;
-            const pctUsed = Math.min(100, (yr.used / total) * 100);
-            return (
-              <div style={{ marginTop: 12, height: 8, background: "rgba(255,255,255,0.2)", borderRadius: 4, overflow: "hidden" }}>
-                <div style={{ width: pctUsed + "%", height: "100%", background: COLORS.gold, transition: "width 0.3s" }} />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 0 }}>
+            <div style={{ padding: "14px 18px", borderRight: `1px solid ${COLORS.borderLight}` }}>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Date of Hire</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>{currentUser.dateOfHire || "—"}</div>
+            </div>
+            <div style={{ padding: "14px 18px" }}>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Seniority</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>{seniority ? seniority.formatted : "—"}</div>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <Card style={{ padding: 0, marginBottom: 16, overflow: "hidden", cursor: "pointer", transition: "transform 0.15s, box-shadow 0.15s" }}
+              onClick={() => setPtoModalOpen(true)}
+              onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(11,40,83,0.12)"; }}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow = ""; }}
+              title="Click to see year-by-year accrual">
+          <div style={{ padding: "18px 24px 16px", background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDark} 100%)`, color: "white", position: "relative" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div style={{ fontSize: 11, opacity: 0.85, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 600 }}>Time Off</div>
+              <div style={{ fontSize: 11, opacity: 0.85, fontWeight: 600 }}>Click for accrual ↗</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginTop: 6, flexWrap: "wrap" }}>
+              <div>
+                <span style={{ fontSize: 40, fontWeight: 800, lineHeight: 1 }}>{bal}</span>
+                <span style={{ fontSize: 16, opacity: 0.9, marginLeft: 6 }}>days available</span>
               </div>
-            );
-          })()}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 0 }}>
-          <div style={{ padding: "14px 18px", borderRight: `1px solid ${COLORS.borderLight}` }}>
-            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Used {ptoSummary.currentYear}</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>{ptoSummary.totalUsedThisYear}<span style={{ fontSize: 13, color: COLORS.textMuted, fontWeight: 400, marginLeft: 4 }}>days</span></div>
-          </div>
-          <div style={{ padding: "14px 18px", borderRight: `1px solid ${COLORS.borderLight}` }}>
-            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Date of Hire</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>{currentUser.dateOfHire || "—"}</div>
-          </div>
-          <div style={{ padding: "14px 18px", borderRight: `1px solid ${COLORS.borderLight}` }}>
-            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Seniority</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>{seniority ? seniority.formatted : "—"}</div>
-          </div>
-          <div style={{ padding: "14px 18px" }}>
-            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Carried Forward</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.text, marginTop: 4, display: "flex", alignItems: "baseline", gap: 6 }}>
-              {ptoSummary.years[ptoSummary.years.length - 1]?.carriedIn || 0}<span style={{ fontSize: 13, color: COLORS.textMuted, fontWeight: 400 }}>days</span>
+              <div style={{ fontSize: 13, opacity: 0.9 }}>
+                {(ptoSummary.years[ptoSummary.years.length - 1]?.carriedIn || 0) > 0
+                  ? `${ptoSummary.years[ptoSummary.years.length - 1].allot}-day annual + ${ptoSummary.years[ptoSummary.years.length - 1].carriedIn} carried in`
+                  : `${currentUser.ptoAllot || 0}-day annual allotment`}
+              </div>
             </div>
-            <div style={{ marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
-              <HandbookLink topic="Part 5 — Vacation / Personal Time → Accrual and Carryover" label="Part 5 · Accrual & Carryover" />
+            {/* Progress bar relative to "available before using" = allot + carriedIn */}
+            {(() => {
+              const yr = ptoSummary.years[ptoSummary.years.length - 1] || { allot: 0, carriedIn: 0, used: 0 };
+              const total = yr.allot + yr.carriedIn;
+              if (total <= 0) return null;
+              const pctUsed = Math.min(100, (yr.used / total) * 100);
+              return (
+                <div style={{ marginTop: 12, height: 8, background: "rgba(255,255,255,0.2)", borderRadius: 4, overflow: "hidden" }}>
+                  <div style={{ width: pctUsed + "%", height: "100%", background: COLORS.gold, transition: "width 0.3s" }} />
+                </div>
+              );
+            })()}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 0 }}>
+            <div style={{ padding: "14px 18px", borderRight: `1px solid ${COLORS.borderLight}` }}>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Used {ptoSummary.currentYear}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>{ptoSummary.totalUsedThisYear}<span style={{ fontSize: 13, color: COLORS.textMuted, fontWeight: 400, marginLeft: 4 }}>days</span></div>
+            </div>
+            <div style={{ padding: "14px 18px", borderRight: `1px solid ${COLORS.borderLight}` }}>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Date of Hire</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>{currentUser.dateOfHire || "—"}</div>
+            </div>
+            <div style={{ padding: "14px 18px", borderRight: `1px solid ${COLORS.borderLight}` }}>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Seniority</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text, marginTop: 4 }}>{seniority ? seniority.formatted : "—"}</div>
+            </div>
+            <div style={{ padding: "14px 18px" }}>
+              <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Carried Forward</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: COLORS.text, marginTop: 4, display: "flex", alignItems: "baseline", gap: 6 }}>
+                {ptoSummary.years[ptoSummary.years.length - 1]?.carriedIn || 0}<span style={{ fontSize: 13, color: COLORS.textMuted, fontWeight: 400 }}>days</span>
+              </div>
+              <div style={{ marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
+                <HandbookLink topic="Part 5 — Vacation / Personal Time → Accrual and Carryover" label="Part 5 · Accrual & Carryover" />
+              </div>
             </div>
           </div>
-        </div>
-        <div style={{ padding: "10px 18px", background: COLORS.bg, borderTop: `1px solid ${COLORS.borderLight}`, fontSize: 11, color: COLORS.textDim, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span>PTO allotment based on years of service.</span>
-          <span onClick={(e) => e.stopPropagation()}>
-            <HandbookLink topic="Part 5 — Vacation / Personal Time" label="Part 5 · Vacation / Personal Time" />
-          </span>
-        </div>
-      </Card>
+          <div style={{ padding: "10px 18px", background: COLORS.bg, borderTop: `1px solid ${COLORS.borderLight}`, fontSize: 11, color: COLORS.textDim, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span>PTO allotment based on years of service.</span>
+            <span onClick={(e) => e.stopPropagation()}>
+              <HandbookLink topic="Part 5 — Vacation / Personal Time" label="Part 5 · Vacation / Personal Time" />
+            </span>
+          </div>
+        </Card>
+      )}
 
       <PTOAccrualModal open={ptoModalOpen} onClose={() => setPtoModalOpen(false)} person={currentUser} />
 
@@ -10044,20 +10096,54 @@ Approve or deny in: PointerOS → HR Toolsuite → Employees (admin view).
   );
 }
 
+// ============================================================
+// REIMBURSEMENT CONFIG
+// Categories: top 6 most common at PFG + Other. Used in the submit dropdown.
+// Statuses form a 5-stage pipeline with traffic-light colors so an advisor can
+// glance and see where each request is. The pipeline:
+//   submitted   → just submitted, awaiting Matt's review
+//   inProgress  → Matt reviewing / asking questions
+//   denied      → returned for corrections (employee can resubmit)
+//   approved    → approved, waiting on payroll to cut the check
+//   paid        → fully reimbursed, closed
+// ============================================================
+const REIMB_CATEGORIES = [
+  "Meal",
+  "Travel",
+  "Office",
+  "Education",
+  "Professional Dues",
+  "Client Entertainment",
+  "Other",
+];
+
+const REIMB_STATUSES = [
+  { key: "submitted",  label: "Submitted",                 short: "SUBMITTED",  color: "#E67E22", desc: "Awaiting review" },
+  { key: "inProgress", label: "In Progress",               short: "IN PROGRESS", color: "#F1C40F", desc: "Under review" },
+  { key: "denied",     label: "Denied — Corrections",      short: "DENIED",     color: "#C0392B", desc: "Returned to employee" },
+  { key: "approved",   label: "Approved — Pending Payroll", short: "APPROVED",   color: "#7DCE82", desc: "Awaiting payroll" },
+  { key: "paid",       label: "Paid",                       short: "PAID",       color: "#1FB67D", desc: "Reimbursed and closed" },
+];
+
+const REIMB_STATUS_MAP = REIMB_STATUSES.reduce((acc, s) => { acc[s.key] = s; return acc; }, {});
+// Legacy status names mapped to the new pipeline so old records don't render as blank
+const LEGACY_REIMB_STATUS_MAP = {
+  pending:  "submitted",
+  approved: "approved",
+  denied:   "denied",
+};
+function normalizeReimbStatus(s) {
+  if (!s) return "submitted";
+  if (REIMB_STATUS_MAP[s]) return s;
+  return LEGACY_REIMB_STATUS_MAP[s] || "submitted";
+}
+
 function HRReimbView({ currentUser, reimbursements, saveHR, isAdmin, hrSettings }) {
   const [form, setForm] = useState({ date: "", amount: "", category: "", desc: "" });
   const [attachedFile, setAttachedFile] = useState(null);   // { name, size, type, data } once read
   const [fileWarning, setFileWarning] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
-
-  // Filters
-  const [filterDateFrom, setFilterDateFrom] = useState("");
-  const [filterDateTo, setFilterDateTo] = useState("");
-  const [filterAmountMin, setFilterAmountMin] = useState("");
-  const [filterAmountMax, setFilterAmountMax] = useState("");
-  const [filterCategory, setFilterCategory] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
 
   const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB cap (browser localStorage budget)
 
@@ -10090,14 +10176,16 @@ function HRReimbView({ currentUser, reimbursements, saveHR, isAdmin, hrSettings 
       amount: parseFloat(form.amount),
       category: form.category,
       desc: form.desc,
-      status: "pending",
+      status: "submitted",
       submitted: new Date().toISOString(),
       file: attachedFile || null,
+      statusHistory: [{ status: "submitted", at: new Date().toISOString(), by: currentUser.name }],
     };
     const next = [...reimbursements, record];
     saveHR({ reimbursements: next });
     // Build email body
-    const recipients = hrSettings?.notifyEmails?.length ? hrSettings.notifyEmails : ["matt@pointerfg.com", "alex@pointerfg.com"];
+    // Notify default → Matt only. Reimbursement approvals go to Matt; Alex is excluded by policy.
+    const recipients = hrSettings?.notifyEmails?.length ? hrSettings.notifyEmails : ["mbruce@pointerfg.com"];
     const fileNote = attachedFile ? `\nReceipt attached: ${attachedFile.name} (${(attachedFile.size/1024).toFixed(0)} KB) — view in PointerOS to download.` : "\nNo receipt attached.";
     const body =
 `A new reimbursement request has been submitted in PointerOS.
@@ -10128,16 +10216,19 @@ Approve or deny at: PointerOS → HR Toolsuite → Reimbursements
   const updateStatus = (id, status) => {
     const r = reimbursements.find(x => x.id === id);
     if (!r) return;
-    const next = reimbursements.map(x => x.id === id ? { ...x, status, reviewedAt: new Date().toISOString(), reviewedBy: currentUser.name } : x);
+    const stamp = { status, at: new Date().toISOString(), by: currentUser.name };
+    const history = Array.isArray(r.statusHistory) ? [...r.statusHistory, stamp] : [stamp];
+    const next = reimbursements.map(x => x.id === id ? { ...x, status, statusHistory: history, reviewedAt: new Date().toISOString(), reviewedBy: currentUser.name } : x);
     saveHR({ reimbursements: next });
     // Optionally notify the submitter
     if (r.userEmail) {
-      const ok = confirm(`Mark as ${status.toUpperCase()} and email ${r.userName} about the decision?`);
+      const statusObj = REIMB_STATUS_MAP[status] || { label: status };
+      const ok = confirm(`Mark as "${statusObj.label}" and email ${r.userName} about the update?`);
       if (ok) {
         sendEmail({
           to: [r.userEmail],
-          subject: `Reimbursement ${status.toUpperCase()}: $${r.amount.toFixed(2)} — ${r.category}`,
-          body: `Your reimbursement request submitted on ${r.date} for $${r.amount.toFixed(2)} (${r.category}) has been ${status} by ${currentUser.name}.\n\n— PointerOS`,
+          subject: `Reimbursement update: $${r.amount.toFixed(2)} — ${r.category}`,
+          body: `Your reimbursement request submitted on ${r.date} for $${r.amount.toFixed(2)} (${r.category}) has been updated to "${statusObj.label}" by ${currentUser.name}.\n\n— PointerOS`,
         });
       }
     }
@@ -10148,35 +10239,21 @@ Approve or deny at: PointerOS → HR Toolsuite → Reimbursements
     saveHR({ reimbursements: reimbursements.filter(r => r.id !== id) });
   };
 
+  // Show every request the user is entitled to see — masters see all, regular employees see only their own.
+  // No filtering or searching: this page is short by design.
   const visible = isAdmin ? reimbursements : reimbursements.filter(r => r.userId === currentUser.id);
+  const filtered = [...visible].sort((a, b) => (b.submitted || "").localeCompare(a.submitted || ""));
 
-  // Apply filters
-  const filtered = visible.filter(r => {
-    if (filterDateFrom && r.date < filterDateFrom) return false;
-    if (filterDateTo && r.date > filterDateTo) return false;
-    if (filterAmountMin !== "" && r.amount < parseFloat(filterAmountMin)) return false;
-    if (filterAmountMax !== "" && r.amount > parseFloat(filterAmountMax)) return false;
-    if (filterCategory && !r.category.toLowerCase().includes(filterCategory.toLowerCase())) return false;
-    if (filterStatus && r.status !== filterStatus) return false;
-    return true;
-  });
-
-  const clearFilters = () => {
-    setFilterDateFrom(""); setFilterDateTo("");
-    setFilterAmountMin(""); setFilterAmountMax("");
-    setFilterCategory(""); setFilterStatus("");
-  };
-  const hasFilters = filterDateFrom || filterDateTo || filterAmountMin || filterAmountMax || filterCategory || filterStatus;
-
-  // Summary stats for filtered set
+  // Summary stats
   const totalAmount = filtered.reduce((s, r) => s + (r.amount || 0), 0);
-  const approvedAmount = filtered.filter(r => r.status === "approved").reduce((s, r) => s + (r.amount || 0), 0);
+  const paidAmount = filtered.filter(r => normalizeReimbStatus(r.status) === "paid").reduce((s, r) => s + (r.amount || 0), 0);
+  const approvedAmount = filtered.filter(r => normalizeReimbStatus(r.status) === "approved").reduce((s, r) => s + (r.amount || 0), 0);
 
   return (
     <div>
       <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, marginBottom: 6 }}>Reimbursements</h2>
       <p style={{ color: COLORS.textMuted, fontSize: 13, marginBottom: 20 }}>
-        Submit a reimbursement request with receipt. {isAdmin ? "Admins review and approve or deny." : "Master users will be notified by email automatically."}
+        Submit a reimbursement request with receipt. Receipt and request are emailed to <b>Matt Bruce (mbruce@pointerfg.com)</b> for review and approval.
       </p>
 
       {/* Submit form */}
@@ -10185,7 +10262,7 @@ Approve or deny at: PointerOS → HR Toolsuite → Reimbursements
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
           <Input label="Date" type="date" value={form.date} onChange={v => setForm({ ...form, date: v })} />
           <Input label="Amount ($)" type="number" value={form.amount} onChange={v => setForm({ ...form, amount: v })} placeholder="0.00" />
-          <Input label="Category" value={form.category} onChange={v => setForm({ ...form, category: v })} placeholder="Meals, Travel, Office…" />
+          <Select label="Category" value={form.category} onChange={v => setForm({ ...form, category: v })} options={REIMB_CATEGORIES} placeholder="Select category…" />
         </div>
         <TextArea label="Description / Purpose" value={form.desc} onChange={v => setForm({ ...form, desc: v })} />
 
@@ -10199,71 +10276,43 @@ Approve or deny at: PointerOS → HR Toolsuite → Reimbursements
             </div>
           )}
           {fileWarning && <div style={{ marginTop: 6, fontSize: 12, color: COLORS.danger }}>{fileWarning}</div>}
-          <div style={{ marginTop: 4, fontSize: 11, color: COLORS.textDim }}>PDF or image, 2 MB max. Stored with the request.</div>
+          <div style={{ marginTop: 4, fontSize: 11, color: COLORS.textDim }}>PDF or image, 2 MB max. The receipt will be sent to mbruce@pointerfg.com when you submit.</div>
         </div>
 
         <div style={{ marginTop: 14, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <Button onClick={submit} disabled={submitting}><IconPlus size={14} /> Submit & Notify Master Users</Button>
+          <Button onClick={submit} disabled={submitting}><IconPlus size={14} /> Submit</Button>
           <span style={{ fontSize: 11, color: COLORS.textDim }}>
-            Will open your mail client with a pre-filled message to {(hrSettings?.notifyEmails || []).join(", ")}.
+            Opens your mail client with a pre-filled message to mbruce@pointerfg.com (and any other recipients configured in HR Settings).
           </span>
         </div>
       </Card>
 
-      {/* Filters */}
-      <Card style={{ padding: 16, marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>Search & Filter</div>
-          {hasFilters && <Button size="sm" variant="ghost" onClick={clearFilters}>Clear filters</Button>}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: COLORS.textMuted, marginBottom: 4 }}>Date from</label>
-            <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit" }} />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: COLORS.textMuted, marginBottom: 4 }}>Date to</label>
-            <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit" }} />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: COLORS.textMuted, marginBottom: 4 }}>Amount min ($)</label>
-            <input type="number" value={filterAmountMin} onChange={e => setFilterAmountMin(e.target.value)} placeholder="0" style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit" }} />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: COLORS.textMuted, marginBottom: 4 }}>Amount max ($)</label>
-            <input type="number" value={filterAmountMax} onChange={e => setFilterAmountMax(e.target.value)} placeholder="∞" style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit" }} />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: COLORS.textMuted, marginBottom: 4 }}>Category contains</label>
-            <input type="text" value={filterCategory} onChange={e => setFilterCategory(e.target.value)} placeholder="travel" style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit" }} />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: COLORS.textMuted, marginBottom: 4 }}>Status</label>
-            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit" }}>
-              <option value="">All</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="denied">Denied</option>
-            </select>
-          </div>
-        </div>
-      </Card>
-
-      {/* Results */}
+      {/* Results — every request, no filters */}
       <Card style={{ padding: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
           <div style={{ fontSize: 14, fontWeight: 600 }}>
-            {isAdmin ? "All Requests" : "My Requests"} <span style={{ fontWeight: 400, color: COLORS.textMuted }}>· {filtered.length} of {visible.length}</span>
+            {isAdmin ? "All Requests" : "My Requests"} <span style={{ fontWeight: 400, color: COLORS.textMuted }}>· {filtered.length}</span>
           </div>
-          <div style={{ display: "flex", gap: 16, fontSize: 12, color: COLORS.textMuted }}>
+          <div style={{ display: "flex", gap: 16, fontSize: 12, color: COLORS.textMuted, flexWrap: "wrap" }}>
             <span>Total: <b style={{ color: COLORS.text }}>${totalAmount.toFixed(2)}</b></span>
-            <span>Approved: <b style={{ color: COLORS.success }}>${approvedAmount.toFixed(2)}</b></span>
+            <span>Approved: <b style={{ color: REIMB_STATUS_MAP.approved.color }}>${approvedAmount.toFixed(2)}</b></span>
+            <span>Paid: <b style={{ color: REIMB_STATUS_MAP.paid.color }}>${paidAmount.toFixed(2)}</b></span>
           </div>
         </div>
+
+        {/* Status pipeline legend so the color codes are explained on every visit */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", padding: 10, background: "#F8FBFF", borderRadius: 8 }}>
+          <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700, alignSelf: "center", marginRight: 4 }}>Status pipeline:</div>
+          {REIMB_STATUSES.map(s => (
+            <div key={s.key} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: COLORS.textMuted }}>
+              <span style={{ width: 10, height: 10, borderRadius: "50%", background: s.color, display: "inline-block" }} />
+              <span>{s.label}</span>
+            </div>
+          ))}
+        </div>
+
         {filtered.length === 0 ? (
-          <div style={{ color: COLORS.textMuted, fontSize: 13, padding: 16, textAlign: "center" }}>
-            {visible.length === 0 ? "No requests yet." : "No requests match your filters."}
-          </div>
+          <div style={{ color: COLORS.textMuted, fontSize: 13, padding: 16, textAlign: "center" }}>No requests yet.</div>
         ) : (
           <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
             <thead><tr style={{ background: "#F8FAFC", textAlign: "left" }}>
@@ -10276,8 +10325,10 @@ Approve or deny at: PointerOS → HR Toolsuite → Reimbursements
               <th style={{ padding: "8px" }}>Actions</th>
             </tr></thead>
             <tbody>
-              {filtered.slice().reverse().map(r => {
+              {filtered.map(r => {
                 const isOpen = expandedId === r.id;
+                const statusKey = normalizeReimbStatus(r.status);
+                const statusObj = REIMB_STATUS_MAP[statusKey];
                 return (
                   <React.Fragment key={r.id}>
                     <tr style={{ borderTop: `1px solid ${COLORS.borderLight}`, cursor: "pointer", background: isOpen ? "#F0F7FC" : "transparent" }}
@@ -10290,16 +10341,19 @@ Approve or deny at: PointerOS → HR Toolsuite → Reimbursements
                       <td style={{ padding: "8px" }}>{r.category}</td>
                       <td style={{ padding: "8px", textAlign: "right", fontWeight: 600 }}>${r.amount.toFixed(2)}</td>
                       <td style={{ padding: "8px" }}>
-                        <Badge color={r.status === "approved" ? COLORS.success : r.status === "denied" ? COLORS.danger : COLORS.warning}>{r.status.toUpperCase()}</Badge>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ width: 10, height: 10, borderRadius: "50%", background: statusObj.color }} />
+                          <Badge color={statusObj.color}>{statusObj.short}</Badge>
+                        </span>
                         {r.file && <span style={{ marginLeft: 6, fontSize: 11, color: COLORS.textMuted }} title="Has attachment">📎</span>}
                       </td>
                       <td style={{ padding: "8px" }} onClick={e => e.stopPropagation()}>
-                        {isAdmin && r.status === "pending" && (
-                          <span style={{ display: "inline-flex", gap: 6 }}>
-                            <Button size="sm" onClick={() => updateStatus(r.id, "approved")}>Approve</Button>
-                            <Button size="sm" variant="danger" onClick={() => updateStatus(r.id, "denied")}>Deny</Button>
-                          </span>
-                        )}
+                        {isAdmin ? (
+                          <select value={statusKey} onChange={e => updateStatus(r.id, e.target.value)}
+                            style={{ padding: "4px 8px", borderRadius: 5, border: `1px solid ${COLORS.border}`, fontSize: 11, fontFamily: "inherit", background: COLORS.surface }}>
+                            {REIMB_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                          </select>
+                        ) : null}
                         {(isAdmin || r.userId === currentUser.id) && (
                           <Button size="sm" variant="ghost" onClick={() => removeReimb(r.id)} style={{ marginLeft: 6 }}><IconTrash size={12} /></Button>
                         )}
@@ -10312,9 +10366,26 @@ Approve or deny at: PointerOS → HR Toolsuite → Reimbursements
                             <div>
                               <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Description</div>
                               <div style={{ fontSize: 13, color: COLORS.text, whiteSpace: "pre-wrap", marginBottom: 12 }}>{r.desc || "(no description provided)"}</div>
-                              <div style={{ fontSize: 11, color: COLORS.textDim }}>
-                                Submitted {new Date(r.submitted).toLocaleString()} {r.reviewedAt && `· ${r.status} by ${r.reviewedBy} on ${new Date(r.reviewedAt).toLocaleString()}`}
+                              <div style={{ fontSize: 11, color: COLORS.textDim, marginBottom: 8 }}>
+                                Submitted {new Date(r.submitted).toLocaleString()}
+                                {r.reviewedAt && ` · last updated by ${r.reviewedBy} on ${new Date(r.reviewedAt).toLocaleString()}`}
                               </div>
+                              {Array.isArray(r.statusHistory) && r.statusHistory.length > 1 && (
+                                <div>
+                                  <div style={{ fontSize: 10, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700, marginTop: 8, marginBottom: 4 }}>Status history</div>
+                                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                    {r.statusHistory.map((h, i) => {
+                                      const o = REIMB_STATUS_MAP[h.status] || { label: h.status, color: COLORS.textMuted };
+                                      return (
+                                        <div key={i} style={{ fontSize: 11, color: COLORS.textMuted, display: "flex", alignItems: "center", gap: 6 }}>
+                                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: o.color }} />
+                                          <span>{o.label} · {new Date(h.at).toLocaleString()} · {h.by}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                             {r.file && (
                               <div style={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: 12 }}>
@@ -10457,7 +10528,7 @@ function HRCalendarView({ calDate, setCalDate, calFilters, setCalFilters, people
       submitted: new Date().toISOString(),
     };
     saveHR({ eventRequests: [...(eventRequests || []), request] });
-    const recipients = hrSettings?.notifyEmails?.length ? hrSettings.notifyEmails : ["matt@pointerfg.com", "alex@pointerfg.com"];
+    const recipients = hrSettings?.notifyEmails?.length ? hrSettings.notifyEmails : ["mbruce@pointerfg.com", "asuarez@pointerfg.com"];
     const body =
 `An employee has requested a new company event in PointerOS.
 
@@ -10767,7 +10838,7 @@ function HRLeaveRequestView({ currentUser, leaveRequests, saveHR, isOwnerUser, h
     };
     const next = [...(leaveRequests || []), request];
     saveHR({ leaveRequests: next });
-    const recipients = hrSettings?.notifyEmails?.length ? hrSettings.notifyEmails : ["matt@pointerfg.com", "alex@pointerfg.com"];
+    const recipients = hrSettings?.notifyEmails?.length ? hrSettings.notifyEmails : ["mbruce@pointerfg.com", "asuarez@pointerfg.com"];
     const portionLabel = {
       "full": "Full day(s)",
       "half-am": "Half day (AM)",
@@ -11230,7 +11301,7 @@ function HRSettingsView({ hrSettings, saveHR }) {
         </div>
         <textarea value={emails} onChange={e => setEmails(e.target.value)} rows={3}
           style={{ width: "100%", padding: 10, borderRadius: 6, border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }}
-          placeholder="matt@pointerfg.com, alex@pointerfg.com" />
+          placeholder="mbruce@pointerfg.com, asuarez@pointerfg.com" />
         <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
           <Button onClick={save}>Save</Button>
           {saved && <span style={{ color: COLORS.success, fontSize: 13, fontWeight: 600 }}>✓ Saved</span>}
