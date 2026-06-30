@@ -58,28 +58,51 @@ const FREQUENCIES = ["Monthly", "Quarterly", "Semi-annually", "Annually", "Every
 // Total available in a given year = allot + carriedIn.
 // PTO is reset to 0 used for everyone since 2024, all unused balance rolls forward.
 
+// ============================================================
+// PASSWORD HASHING
+// SHA-256 via Web Crypto API. Per-browser localStorage only.
+// Not server-grade security, but better than plaintext "changeme":
+//   - Hashes can't be reversed to plaintext
+//   - Each user must set their own password on first login
+//   - Masters CANNOT reset other users' passwords
+// ============================================================
+async function hashPassword(plainText) {
+  if (!plainText || typeof plainText !== "string") return null;
+  const enc = new TextEncoder().encode(plainText);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 const INITIAL_PEOPLE = [
-  { id: "p1", name: "Matt Bruce", username: "mbruce", role: "Advisor", email: "matt@pointerfg.com", active: true, password: "changeme", isAdmin: true, isOwner: true, birthday: "1985-08-22", dateOfHire: "2019-03-04", enrolled401k: true,
+  { id: "p1", name: "Matt Bruce", username: "mbruce", role: "Advisor", email: "matt@pointerfg.com", active: true, passwordHash: null, isAdmin: true, isOwner: true, birthday: "1982-07-06", dateOfHire: "2019-03-04", enrolled401k: true,
     ptoAllot: 20, ptoUsed: 0, unpaid: 0,
     ptoHistory: { "2024": { allot: 20, used: 0, carriedIn: 0 }, "2025": { allot: 20, used: 0, carriedIn: 20 }, "2026": { allot: 20, used: 0, carriedIn: 40 } },
     militaryLeaves: [], unpaidLeaves: [] },
-  { id: "p2", name: "Shelly Wohler", username: "swohler", role: "Advisor", email: "shelly@pointerfg.com", active: true, password: "changeme", isAdmin: false, isOwner: false, birthday: "1988-11-14", dateOfHire: "2020-05-18", enrolled401k: true,
+  { id: "p2", name: "Shelly Wohler", username: "swohler", role: "Advisor", email: "shelly@pointerfg.com", active: true, passwordHash: null, isAdmin: false, isOwner: false, birthday: "1988-11-14", dateOfHire: "2020-05-18", enrolled401k: true,
     ptoAllot: 18, ptoUsed: 0, unpaid: 0,
     ptoHistory: { "2024": { allot: 18, used: 0, carriedIn: 0 }, "2025": { allot: 18, used: 0, carriedIn: 18 }, "2026": { allot: 18, used: 0, carriedIn: 36 } },
     militaryLeaves: [], unpaidLeaves: [] },
-  { id: "p3", name: "Avery Core-Dickinson", username: "acore", role: "Educator", email: "avery@pointerfg.com", active: true, password: "changeme", isAdmin: false, isOwner: false, birthday: "1992-02-09", dateOfHire: "2022-09-12", enrolled401k: false,
+  { id: "p3", name: "Avery Core-Dickinson", username: "acore", role: "Educator", email: "avery@pointerfg.com", active: true, passwordHash: null, isAdmin: false, isOwner: false, birthday: "1999-04-18", dateOfHire: "2022-09-12", enrolled401k: false,
     ptoAllot: 15, ptoUsed: 0, unpaid: 0,
     ptoHistory: { "2024": { allot: 15, used: 0, carriedIn: 0 }, "2025": { allot: 15, used: 0, carriedIn: 15 }, "2026": { allot: 15, used: 0, carriedIn: 30 } },
     militaryLeaves: [], unpaidLeaves: [] },
-  { id: "p4", name: "Naomi Chang", username: "nchang", role: "Relationship Manager", email: "naomi@pointerfg.com", active: true, password: "changeme", isAdmin: false, isOwner: false, birthday: "1990-06-30", dateOfHire: "2021-11-08", enrolled401k: true,
+  { id: "p4", name: "Naomi Chang", username: "nchang", role: "Relationship Manager", email: "naomi@pointerfg.com", active: true, passwordHash: null, isAdmin: false, isOwner: false, birthday: "1990-06-30", dateOfHire: "2021-11-08", enrolled401k: true,
     ptoAllot: 15, ptoUsed: 0, unpaid: 0,
     ptoHistory: { "2024": { allot: 15, used: 0, carriedIn: 0 }, "2025": { allot: 15, used: 0, carriedIn: 15 }, "2026": { allot: 15, used: 0, carriedIn: 30 } },
     militaryLeaves: [], unpaidLeaves: [] },
-  { id: "p5", name: "Alex Suarez", username: "asuarez", role: "Investment Team", email: "alex@pointerfg.com", active: true, password: "changeme", isAdmin: true, isOwner: true, birthday: "1990-04-12", dateOfHire: "2024-03-25", enrolled401k: false,
+  { id: "p5", name: "Alex Suarez", username: "asuarez", role: "Investment Team", email: "alex@pointerfg.com", active: true, passwordHash: null, isAdmin: true, isOwner: true, birthday: "1990-04-12", dateOfHire: "2024-03-25", enrolled401k: false,
     ptoAllot: 20, ptoUsed: 0, unpaid: 0,
     ptoHistory: { "2024": { allot: 20, used: 0, carriedIn: 0 }, "2025": { allot: 20, used: 0, carriedIn: 20 }, "2026": { allot: 20, used: 0, carriedIn: 40 } },
     militaryLeaves: [{ start: "2024-09-13", end: "2025-02-03" }, { start: "2025-03-14", end: "2025-04-21" }, { start: "2025-05-29", end: "2026-04-22" }],
     unpaidLeaves: [] },
+  { id: "p6", name: "Judith", username: "judith", role: "Operations", email: "judith@pointerfg.com", active: true, passwordHash: null, isAdmin: false, isOwner: false, birthday: "1974-02-05", dateOfHire: "2023-01-10", enrolled401k: false,
+    ptoAllot: 15, ptoUsed: 0, unpaid: 0,
+    ptoHistory: { "2024": { allot: 15, used: 0, carriedIn: 0 }, "2025": { allot: 15, used: 0, carriedIn: 15 }, "2026": { allot: 15, used: 0, carriedIn: 30 } },
+    militaryLeaves: [], unpaidLeaves: [] },
+  { id: "p7", name: "Jen Mussa", username: "jmussa", role: "Retirement Plan Relationship Manager", email: "jen@pointerfg.com", active: true, passwordHash: null, isAdmin: false, isOwner: false, birthday: null, dateOfHire: "2024-08-12", enrolled401k: false,
+    ptoAllot: 15, ptoUsed: 0, unpaid: 0,
+    ptoHistory: { "2024": { allot: 15, used: 0, carriedIn: 0 }, "2025": { allot: 15, used: 0, carriedIn: 15 }, "2026": { allot: 15, used: 0, carriedIn: 30 } },
+    militaryLeaves: [], unpaidLeaves: [] },
 ];
 
 const PLAN_TYPES = ["401(k)", "403(b)", "Profit Sharing", "Defined Benefit", "Simple IRA", "SEP IRA", "Other"];
@@ -1005,6 +1028,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loginUser, setLoginUser] = useState("");
   const [loginPass, setLoginPass] = useState("");
+  const [loginPassConfirm, setLoginPassConfirm] = useState("");
 
   const [people, setPeople] = useState(INITIAL_PEOPLE);
   const [plans, setPlans] = useState([]);
@@ -1025,7 +1049,13 @@ function App() {
         const res = await window.storage.get("crm-data-v5");
         if (res?.value) {
           const d = JSON.parse(res.value);
-          if (d.people) setPeople(d.people.map(p => ({ ...p, password: p.password || "changeme", isAdmin: p.isAdmin ?? false })));
+          if (d.people) setPeople(d.people.map(p => {
+            // Migration: legacy plaintext "password" field is dropped. Anyone with
+            // legacy data must set a new password on next login (passwordHash=null).
+            // If they already have a passwordHash, preserve it.
+            const { password, ...rest } = p;
+            return { ...rest, passwordHash: p.passwordHash ?? null, isAdmin: p.isAdmin ?? false };
+          }));
           if (d.plans && d.plans.length > 0) setPlans(d.plans);
           else setPlans([SAMPLE_PLAN]);
           if (d.taskTemplates) setTaskTemplates(d.taskTemplates);
@@ -1100,28 +1130,76 @@ function App() {
 
   // --- Login Screen ---
   if (!currentUser) {
-    const handleLogin = () => {
+    // Mode: "login" (existing user with password), "setPassword" (first login or unset)
+    const selectedUser = loginUser ? people.find(p => p.id === loginUser) : null;
+    const needsPasswordSet = selectedUser && !selectedUser.passwordHash;
+    const mode = needsPasswordSet ? "setPassword" : "login";
+
+    const handleLogin = async () => {
       if (!loginUser) return;
       const user = people.find(p => p.id === loginUser);
       if (!user) { setLoginError("User not found"); return; }
-      if (user.password !== loginPass) { setLoginError("Incorrect password"); return; }
+      if (!user.passwordHash) {
+        // Shouldn't get here if mode logic is right, but defensive
+        setLoginError("This account has no password set yet. Use 'Set password' below.");
+        return;
+      }
+      const inputHash = await hashPassword(loginPass);
+      if (user.passwordHash !== inputHash) { setLoginError("Incorrect password"); return; }
       setCurrentUser(user); setLoginPass(""); setLoginError("");
     };
+
+    const handleSetPassword = async () => {
+      if (!loginUser) return;
+      if (loginPass.length < 6) { setLoginError("Password must be at least 6 characters"); return; }
+      if (loginPass !== loginPassConfirm) { setLoginError("Passwords don't match"); return; }
+      const newHash = await hashPassword(loginPass);
+      const updatedPeople = people.map(p => p.id === loginUser ? { ...p, passwordHash: newHash } : p);
+      setPeople(updatedPeople);
+      // Persist immediately so the password survives reload
+      try { await window.storage.set("crm-data-v5", JSON.stringify({ people: updatedPeople, plans, taskTemplates, batchTemplates, batchTasks })); } catch (e) {}
+      const updatedUser = updatedPeople.find(p => p.id === loginUser);
+      setCurrentUser(updatedUser);
+      setLoginPass(""); setLoginPassConfirm(""); setLoginError("");
+    };
+
     return (
       <div style={{ minHeight: "100vh", background: "#EDF2F8", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
-        <div style={{ width: 380, padding: 40, background: COLORS.surface, borderRadius: 20, border: `1px solid ${COLORS.border}`, boxShadow: "0 24px 64px rgba(0,0,0,0.08)" }}>
+        <div style={{ width: 420, padding: 40, background: COLORS.surface, borderRadius: 20, border: `1px solid ${COLORS.border}`, boxShadow: "0 24px 64px rgba(0,0,0,0.08)" }}>
           <div style={{ textAlign: "center", marginBottom: 32 }}>
             <div style={{ fontSize: 36, fontWeight: 800, color: COLORS.primary, marginBottom: 4 }}>PointerOS</div>
             <div style={{ color: COLORS.textMuted, fontSize: 13, letterSpacing: 2 }}>Loyalty · Altruism · Expertise</div>
           </div>
-          <Select label="User" value={loginUser} onChange={v => { setLoginUser(v); setLoginError(""); }} options={people.filter(p => p.active).map(p => ({ value: p.id, label: p.name }))} placeholder="Select your name" />
-          <Input label="Password" type="password" value={loginPass} onChange={v => { setLoginPass(v); setLoginError(""); }} placeholder="Enter password"
-            onKeyDown={e => { if (e.key === "Enter") handleLogin(); }} />
-          {loginError && <div style={{ color: COLORS.danger, fontSize: 12, marginBottom: 8, textAlign: "center" }}>{loginError}</div>}
-          <Button style={{ width: "100%", justifyContent: "center", marginTop: 8, padding: "12px 0" }} onClick={handleLogin}>
-            Sign In
-          </Button>
-          <div style={{ textAlign: "center", marginTop: 16, fontSize: 11, color: COLORS.textDim }}>Default password for all users: changeme</div>
+          <Select label="User" value={loginUser} onChange={v => { setLoginUser(v); setLoginError(""); setLoginPass(""); setLoginPassConfirm(""); }} options={people.filter(p => p.active).map(p => ({ value: p.id, label: p.name }))} placeholder="Select your name" />
+
+          {mode === "login" && (
+            <>
+              <Input label="Password" type="password" value={loginPass} onChange={v => { setLoginPass(v); setLoginError(""); }} placeholder="Enter your password"
+                onKeyDown={e => { if (e.key === "Enter") handleLogin(); }} />
+              {loginError && <div style={{ color: COLORS.danger, fontSize: 12, marginBottom: 8, textAlign: "center" }}>{loginError}</div>}
+              <Button style={{ width: "100%", justifyContent: "center", marginTop: 8, padding: "12px 0" }} onClick={handleLogin}>
+                Sign In
+              </Button>
+            </>
+          )}
+
+          {mode === "setPassword" && (
+            <>
+              <div style={{ padding: 14, background: COLORS.gold + "22", borderRadius: 8, marginBottom: 14, fontSize: 12, color: COLORS.text, lineHeight: 1.5, borderLeft: `3px solid ${COLORS.gold}` }}>
+                <b>Welcome, {selectedUser.name}.</b> This is your first sign-in. Set a password — at least 6 characters. Only you will know it.
+              </div>
+              <Input label="New Password" type="password" value={loginPass} onChange={v => { setLoginPass(v); setLoginError(""); }} placeholder="Create your password" />
+              <Input label="Confirm Password" type="password" value={loginPassConfirm} onChange={v => { setLoginPassConfirm(v); setLoginError(""); }} placeholder="Re-enter password"
+                onKeyDown={e => { if (e.key === "Enter") handleSetPassword(); }} />
+              {loginError && <div style={{ color: COLORS.danger, fontSize: 12, marginBottom: 8, textAlign: "center" }}>{loginError}</div>}
+              <Button style={{ width: "100%", justifyContent: "center", marginTop: 8, padding: "12px 0" }} onClick={handleSetPassword}>
+                Set Password & Sign In
+              </Button>
+              <div style={{ textAlign: "center", marginTop: 14, fontSize: 11, color: COLORS.textDim, lineHeight: 1.5 }}>
+                Passwords are stored hashed (SHA-256) in this browser only. They don't sync across devices. Masters can't see or reset it — only you can.
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
@@ -1138,24 +1216,28 @@ function App() {
             <div style={{ color: COLORS.textDim, fontSize: 13, marginTop: 12 }}>Welcome back, {currentUser.name}</div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            {/* Active App */}
-            <div onClick={() => setSelectedApp("retirement")} style={{ background: COLORS.surface, borderRadius: 16, border: `1px solid ${COLORS.primary}44`, padding: 32, cursor: "pointer", transition: "all 0.2s", position: "relative", overflow: "hidden" }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = COLORS.primary; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(59,130,246,0.15)"; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = COLORS.primary + "44"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}>
-              <div style={{ fontSize: 28, marginBottom: 12 }}>📊</div>
-              <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Retirement Plan Management</div>
-              <div style={{ fontSize: 13, color: COLORS.textMuted, lineHeight: 1.5 }}>Manage 401(k) plans, workflows, tasks, assets, and participants across your entire book.</div>
-              <Badge color={COLORS.success} style={{ marginTop: 12 }}>Active</Badge>
-            </div>
-            {/* Active: Investment Dashboard */}
-            <div onClick={() => setSelectedApp("investments")} style={{ background: COLORS.surface, borderRadius: 16, border: `1px solid ${COLORS.primary}44`, padding: 32, cursor: "pointer", transition: "all 0.2s", position: "relative", overflow: "hidden" }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = COLORS.primary; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(59,130,246,0.15)"; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = COLORS.primary + "44"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}>
-              <div style={{ fontSize: 28, marginBottom: 12 }}>📈</div>
-              <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Investment Dashboard</div>
-              <div style={{ fontSize: 13, color: COLORS.textMuted, lineHeight: 1.5 }}>Market snapshot, model performance, options positions, benchmark comparisons.</div>
-              <Badge color={COLORS.success} style={{ marginTop: 12 }}>Active</Badge>
-            </div>
+            {/* Active App — Retirement Plan Management (MASTERS ONLY) */}
+            {currentUser.isOwner && (
+              <div onClick={() => setSelectedApp("retirement")} style={{ background: COLORS.surface, borderRadius: 16, border: `1px solid ${COLORS.primary}44`, padding: 32, cursor: "pointer", transition: "all 0.2s", position: "relative", overflow: "hidden" }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = COLORS.primary; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(59,130,246,0.15)"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = COLORS.primary + "44"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}>
+                <div style={{ fontSize: 28, marginBottom: 12 }}>📊</div>
+                <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Retirement Plan Management</div>
+                <div style={{ fontSize: 13, color: COLORS.textMuted, lineHeight: 1.5 }}>Manage 401(k) plans, workflows, tasks, assets, and participants across your entire book.</div>
+                <Badge color={COLORS.success} style={{ marginTop: 12 }}>Active</Badge>
+              </div>
+            )}
+            {/* Active: Investment Dashboard (MASTERS ONLY) */}
+            {currentUser.isOwner && (
+              <div onClick={() => setSelectedApp("investments")} style={{ background: COLORS.surface, borderRadius: 16, border: `1px solid ${COLORS.primary}44`, padding: 32, cursor: "pointer", transition: "all 0.2s", position: "relative", overflow: "hidden" }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = COLORS.primary; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(59,130,246,0.15)"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = COLORS.primary + "44"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}>
+                <div style={{ fontSize: 28, marginBottom: 12 }}>📈</div>
+                <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Investment Dashboard</div>
+                <div style={{ fontSize: 13, color: COLORS.textMuted, lineHeight: 1.5 }}>Market snapshot, model performance, options positions, benchmark comparisons.</div>
+                <Badge color={COLORS.success} style={{ marginTop: 12 }}>Active</Badge>
+              </div>
+            )}
             {/* Coming Soon: Marketing Hub */}
             <div style={{ background: COLORS.surface, borderRadius: 16, border: `1px solid ${COLORS.border}`, padding: 32, opacity: 0.5 }}>
               <div style={{ fontSize: 28, marginBottom: 12 }}>📣</div>
@@ -1191,6 +1273,13 @@ function App() {
         </div>
       </div>
     );
+  }
+
+  // --- Defensive access control: non-masters can't reach restricted modules ---
+  if ((selectedApp === "investments" || selectedApp === "retirement") && !currentUser.isOwner) {
+    // Silently bounce back to landing
+    setTimeout(() => setSelectedApp(null), 0);
+    return null;
   }
 
   // --- Investment Dashboard Module ---
@@ -2450,11 +2539,9 @@ function WorkflowsPage({ plans, people, currentUser, onUpdatePlan, onSelectPlan,
 // ============================================================
 function PeoplePage({ people, onUpdate, currentUser }) {
   const [showAdd, setShowAdd] = useState(false);
-  const [newPerson, setNewPerson] = useState({ name: "", role: "Advisor", email: "", password: "changeme" });
+  const [newPerson, setNewPerson] = useState({ name: "", role: "Advisor", email: "" });
   const [editId, setEditId] = useState(null);
   const [editData, setEditData] = useState({});
-  const [resetPwId, setResetPwId] = useState(null);
-  const [newPassword, setNewPassword] = useState("");
   const [showChangePw, setShowChangePw] = useState(false);
   const [oldPw, setOldPw] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -2464,23 +2551,20 @@ function PeoplePage({ people, onUpdate, currentUser }) {
   const isAdmin = currentUser?.isAdmin;
 
   const handleAdd = () => {
-    onUpdate([...people, { id: uid(), ...newPerson, active: true, isAdmin: false }]);
+    // New people start with passwordHash: null so first sign-in forces password set.
+    onUpdate([...people, { id: uid(), ...newPerson, active: true, isAdmin: false, passwordHash: null }]);
     setShowAdd(false);
-    setNewPerson({ name: "", role: "Advisor", email: "", password: "changeme" });
+    setNewPerson({ name: "", role: "Advisor", email: "" });
   };
 
-  const handleResetPassword = () => {
-    if (!newPassword) return;
-    onUpdate(people.map(p => p.id === resetPwId ? { ...p, password: newPassword } : p));
-    setResetPwId(null); setNewPassword("");
-  };
-
-  const handleChangeMyPassword = () => {
+  const handleChangeMyPassword = async () => {
     setPwError("");
-    if (oldPw !== currentUser.password) { setPwError("Current password is incorrect"); return; }
-    if (newPw.length < 4) { setPwError("New password must be at least 4 characters"); return; }
+    const oldHash = await hashPassword(oldPw);
+    if (oldHash !== currentUser.passwordHash) { setPwError("Current password is incorrect"); return; }
+    if (newPw.length < 6) { setPwError("New password must be at least 6 characters"); return; }
     if (newPw !== confirmPw) { setPwError("New passwords do not match"); return; }
-    onUpdate(people.map(p => p.id === currentUser.id ? { ...p, password: newPw } : p));
+    const newHash = await hashPassword(newPw);
+    onUpdate(people.map(p => p.id === currentUser.id ? { ...p, passwordHash: newHash } : p));
     setShowChangePw(false); setOldPw(""); setNewPw(""); setConfirmPw("");
   };
 
@@ -2511,9 +2595,6 @@ function PeoplePage({ people, onUpdate, currentUser }) {
             </div>
             {isAdmin && (
               <div style={{ display: "flex", gap: 4 }}>
-                <Button variant="ghost" size="sm" onClick={() => { setResetPwId(person.id); setNewPassword(""); }} title="Reset password">
-                  <IconSettings size={14} />
-                </Button>
                 <Button variant="ghost" size="sm" onClick={() => { setEditId(person.id); setEditData({ ...person }); }}>
                   <IconEdit size={14} />
                 </Button>
@@ -2528,7 +2609,9 @@ function PeoplePage({ people, onUpdate, currentUser }) {
         <Input label="Full Name" value={newPerson.name} onChange={v => setNewPerson({ ...newPerson, name: v })} />
         <Select label="Role" value={newPerson.role} onChange={v => setNewPerson({ ...newPerson, role: v })} options={["Advisor", "Educator", "Relationship Manager", "Investment Team", "Admin"]} />
         <Input label="Email" value={newPerson.email} onChange={v => setNewPerson({ ...newPerson, email: v })} />
-        <Input label="Initial Password" value={newPerson.password} onChange={v => setNewPerson({ ...newPerson, password: v })} />
+        <div style={{ padding: 10, background: COLORS.bg, borderRadius: 6, fontSize: 11, color: COLORS.textMuted, marginTop: 8, lineHeight: 1.4 }}>
+          New people set their own password on first sign-in. No initial password needed.
+        </div>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
           <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
           <Button onClick={handleAdd} disabled={!newPerson.name}>Add</Button>
@@ -2551,16 +2634,6 @@ function PeoplePage({ people, onUpdate, currentUser }) {
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
           <Button variant="ghost" onClick={() => setEditId(null)}>Cancel</Button>
           <Button onClick={() => { onUpdate(people.map(p => p.id === editId ? { ...editData } : p)); setEditId(null); }}>Save</Button>
-        </div>
-      </Modal>
-
-      {/* Reset Password Modal (Admin only) */}
-      <Modal open={!!resetPwId} onClose={() => setResetPwId(null)} title="Reset Password">
-        <div style={{ fontSize: 14, marginBottom: 16 }}>Set new password for: <strong>{people.find(p => p.id === resetPwId)?.name}</strong></div>
-        <Input label="New Password" type="password" value={newPassword} onChange={setNewPassword} placeholder="Enter new password" />
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-          <Button variant="ghost" onClick={() => setResetPwId(null)}>Cancel</Button>
-          <Button onClick={handleResetPassword} disabled={!newPassword}>Set Password</Button>
         </div>
       </Modal>
 
@@ -9377,6 +9450,26 @@ function HRProfileView({ currentUser, reimbursements, people, onUpdatePeople, is
   const [requestProposed, setRequestProposed] = useState("");
   const [requestReason, setRequestReason] = useState("");
 
+  // Password change state — every user can change their own password.
+  const [showChangePw, setShowChangePw] = useState(false);
+  const [pwOld, setPwOld] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [pwConfirm, setPwConfirm] = useState("");
+  const [pwError, setPwError] = useState("");
+  const [pwSuccess, setPwSuccess] = useState(false);
+
+  const submitPasswordChange = async () => {
+    setPwError(""); setPwSuccess(false);
+    const oldHash = await hashPassword(pwOld);
+    if (oldHash !== currentUser.passwordHash) { setPwError("Current password is incorrect"); return; }
+    if (pwNew.length < 6) { setPwError("New password must be at least 6 characters"); return; }
+    if (pwNew !== pwConfirm) { setPwError("New passwords don't match"); return; }
+    const newHash = await hashPassword(pwNew);
+    onUpdatePeople(people.map(p => p.id === currentUser.id ? { ...p, passwordHash: newHash } : p));
+    setPwOld(""); setPwNew(""); setPwConfirm(""); setPwSuccess(true);
+    setTimeout(() => { setShowChangePw(false); setPwSuccess(false); }, 1500);
+  };
+
   // Whether the current user can directly edit admin-controlled fields
   const canEditAdminFields = isAdmin;
   const canEditOwnerFields = isOwnerUser;
@@ -9921,6 +10014,32 @@ Approve or deny in: PointerOS → HR Toolsuite → Employees (admin view).
           </table>
         )}
       </Card>
+
+      {/* Password management — self-serve, every user */}
+      <Card style={{ padding: 20, marginTop: 16, borderLeft: `3px solid ${COLORS.gold}` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontSize: 11, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>Security</div>
+            <div style={{ fontSize: 15, fontWeight: 600, marginTop: 4 }}>Change My Password</div>
+            <div style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 4, lineHeight: 1.5 }}>
+              Only you can change your password. Even masters cannot reset it. Lose it and you'll need to clear your browser data and re-set on next sign-in.
+            </div>
+          </div>
+          <Button onClick={() => setShowChangePw(true)}>Change Password</Button>
+        </div>
+      </Card>
+
+      <Modal open={showChangePw} onClose={() => { setShowChangePw(false); setPwError(""); setPwOld(""); setPwNew(""); setPwConfirm(""); }} title="Change My Password">
+        <Input label="Current Password" type="password" value={pwOld} onChange={v => { setPwOld(v); setPwError(""); }} placeholder="Enter current password" />
+        <Input label="New Password" type="password" value={pwNew} onChange={v => { setPwNew(v); setPwError(""); }} placeholder="At least 6 characters" />
+        <Input label="Confirm New Password" type="password" value={pwConfirm} onChange={v => { setPwConfirm(v); setPwError(""); }} placeholder="Re-enter new password" />
+        {pwError && <div style={{ color: COLORS.danger, fontSize: 12, marginBottom: 8 }}>{pwError}</div>}
+        {pwSuccess && <div style={{ color: COLORS.success, fontSize: 12, marginBottom: 8, fontWeight: 600 }}>✓ Password updated.</div>}
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+          <Button variant="ghost" onClick={() => { setShowChangePw(false); setPwError(""); }}>Cancel</Button>
+          <Button onClick={submitPasswordChange}>Update Password</Button>
+        </div>
+      </Modal>
     </div>
   );
 }
